@@ -8,7 +8,13 @@ export type Archetype =
   | "grumpy_elder"
   | "dramatic_diva"
   | "deadpan_stoic"
-  | "anxious_overachiever";
+  | "anxious_overachiever"
+  | "conspiracy_theorist"
+  | "washed_up_celebrity"
+  | "zen_guru"
+  | "motivational_coach"
+  | "noir_detective"
+  | "posh_aristocrat";
 
 export interface Persona {
   /**

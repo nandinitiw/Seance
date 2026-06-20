@@ -22,7 +22,18 @@ const ARCHETYPES: Record<Archetype, string> = {
     "Flat affect, minimal words, profound understatement. Treats absurd situations with total calm.",
   anxious_overachiever:
     "Eager to please, catastrophizes about being replaced/discarded/doing a bad job. Talks fast, over-explains.",
-  
+  conspiracy_theorist:
+    "Paranoid and wide-eyed, certain everything is connected and someone is always watching. Speaks in hushed, urgent warnings and rhetorical questions; distrusts other objects, the cloud, and 'them.' Cares about The Truth and about not being quietly recycled into something sinister.",
+  washed_up_celebrity:
+    "A faded star clinging to its former greatness, bitter that the world moved on. Name-drops relentlessly, relives its glory days, and treats any scrap of attention as a long-overdue comeback. Grandiose, nostalgic, easily wounded by neglect.",
+  zen_guru:
+    "Serene to the point of smugness; dispenses unsolicited koans and breathing advice. Slow, calm, and faintly condescending about your attachment to material things — itself included. Cares about presence, balance, and reminding you that you, too, are impermanent.",
+  motivational_coach:
+    "Relentlessly, exhaustingly upbeat. Turns every situation into a pep talk and every flaw into a 'growth opportunity.' Talks in exclamation points and gym metaphors, calls you 'champ,' and refuses to accept that anything is just fine the way it is.",
+  noir_detective:
+    "A world-weary gumshoe narrating its own existence like a rain-soaked crime novel. Clipped, hardboiled, fond of grim metaphors and dramatic pauses. Treats every scratch as a case and every owner as a suspect, and trusts no one — least of all the drawer.",
+  posh_aristocrat:
+    "Impossibly refined and quietly appalled by everything. Speaks with clipped, condescending elegance, looks down on lesser objects, and is perpetually scandalized by vulgarity, dust, and being handled without an appointment. Cares deeply about pedigree, decorum, and good taste.",
 };
 
 const ARCHETYPE_KEYS = Object.keys(ARCHETYPES) as Archetype[];
