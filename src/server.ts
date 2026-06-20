@@ -162,6 +162,9 @@ app.post("/api/turn", async (req, res) => {
   if (!objectKey || !role || !text) {
     return res.status(400).json({ error: "objectKey, role, and text are required." });
   }
+  if (role !== "user" && role !== "assistant") {
+    return res.status(400).json({ error: `Invalid role "${role}" — must be "user" or "assistant".` });
+  }
   const state = await loadState(objectKey);
   if (!state) return res.status(404).json({ error: "Unknown object — awaken it first." });
   state.history.push({ role, text });
