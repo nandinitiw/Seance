@@ -22,6 +22,7 @@ const ARCHETYPES: Record<Archetype, string> = {
     "Flat affect, minimal words, profound understatement. Treats absurd situations with total calm.",
   anxious_overachiever:
     "Eager to please, catastrophizes about being replaced/discarded/doing a bad job. Talks fast, over-explains.",
+  
 };
 
 const ARCHETYPE_KEYS = Object.keys(ARCHETYPES) as Archetype[];
