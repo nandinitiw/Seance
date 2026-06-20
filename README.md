@@ -22,7 +22,7 @@ Built for HackBerkeley AI Hackathon 2026 — **Ddoski's Playground** track.
      │   Anthropic           (structured output → validated JSON, not prose)
      ▼
  🎨 image gen               paints the character PORTRAIT
-     │   Adobe / Midjourney  (mock = a "spirit" CSS treatment of the photo)
+     │   Adobe / Midjourney  (mock = the captured photo as the portrait)
      ▼
  🗣️  Deepgram               you speak → it hears (STT); it replies → you hear (TTS)
      │                       in the character's own voice
@@ -51,22 +51,23 @@ Each hop is one file in `src/lib/`. Own a hop, ignore the rest.
 ```bash
 npm install
 cp .env.example .env     # works empty — every key is optional
-npm run dev              # → http://localhost:3000
+npm run dev              # → API on http://localhost:3000
 ```
 
-Open the URL, allow camera + mic, point at something, hit **Awaken**.
+This starts the **API server** only. The user-facing client is the Expo phone
+app in [`app/`](app/) — see [app/README.md](app/README.md) to run it on a phone.
 
 > **It runs with zero API keys.** With no `.env`, every hop falls back to a mock:
-> persona is canned, the portrait is a CSS-stylized version of your photo, and the
-> voice uses the browser's built-in speech synthesis. Build the UX first, then add
-> keys one at a time and watch each hop go `mock → live` (the server logs which).
+> the persona is canned and the portrait is a stylized version of your photo. Build
+> the UX first, then add keys one at a time and watch each hop go `mock → live`
+> (the server logs which).
 
 ### Adding the real sponsors
 
 Fill these into `.env` as you collect them at the booths:
 
 - `ANTHROPIC_API_KEY` → real, object-specific personalities (the heart of it)
-- `DEEPGRAM_API_KEY` → real voices instead of robotic browser TTS
+- `DEEPGRAM_API_KEY` → real spoken voices (in mock mode replies are text-only)
 - `IMAGE_PROVIDER=firefly` + Adobe creds, or `=midjourney` + a proxy → real portraits
 - `REDIS_URL` → memory that survives a restart (use the Redis booth's instance)
 
@@ -84,8 +85,6 @@ src/
     deepgram.ts      transcribe() + speak()                        (Deepgram)
     imagegen.ts      paintPortrait() with provider switch          (Adobe/MJ)
     memory.ts        loadState()/saveState() keyed by object       (Redis)
-public/
-  index.html  app.js  style.css     no build step — plain ES modules
 app/
   Expo (React Native) phone client — capture → reveal → talk. See app/README.md
 ```

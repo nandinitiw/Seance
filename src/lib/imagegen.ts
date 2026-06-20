@@ -1,7 +1,7 @@
 import { config } from "../config.js";
 import type { Persona } from "../types.js";
 
-// The portrait hop. Returns a URL the browser can render directly — either a
+// The portrait hop. Returns a URL the app can render directly — either a
 // generated image URL, or a data: URL that re-skins the captured photo (the mock).
 //
 // SCOPE NOTE: for the demo, a static stylized portrait is plenty. Don't spend
@@ -29,9 +29,9 @@ export async function paintPortrait(
 }
 
 /**
- * MOCK: hand the captured photo straight back. The frontend applies a CSS
- * "spirit" treatment (duotone + glow), so the object visibly "comes alive"
- * without any image API. Good enough to demo; swap a provider in later.
+ * MOCK: hand the captured photo straight back as the portrait, so the object
+ * "comes alive" without any image API. Good enough to demo; swap a provider in
+ * later for real generated art.
  */
 function stylizedPhoto(capturedDataUrl: string): string {
   return capturedDataUrl;

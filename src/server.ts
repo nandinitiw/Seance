@@ -1,7 +1,5 @@
 import express from "express";
 import multer from "multer";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { config, logCapabilities } from "./config.js";
 import { awaken, reply } from "./lib/claude.js";
 import { paintPortrait } from "./lib/imagegen.js";
@@ -9,12 +7,11 @@ import { transcribe, speak } from "./lib/deepgram.js";
 import { loadState, saveState } from "./lib/memory.js";
 import type { SessionState } from "./types.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// API only — the client is the Expo phone app in app/. No static web frontend.
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 app.use(express.json({ limit: "15mb" }));
-app.use(express.static(join(__dirname, "..", "public")));
 
 /**
  * POST /api/awaken

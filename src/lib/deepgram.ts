@@ -36,8 +36,7 @@ export async function transcribe(audio: Buffer, contentType: string): Promise<st
 /**
  * Speak text in the character's voice → MP3 bytes.
  * @param voiceModel a Deepgram aura voice id chosen by the persona
- * Returns null in mock mode; the frontend then falls back to the browser's
- * built-in speech synthesis so the demo still talks.
+ * Returns null in mock mode; the app then shows the reply as text (no audio).
  */
 export async function speak(text: string, voiceModel: string): Promise<Buffer | null> {
   if (!caps.hasDeepgram) return null;
