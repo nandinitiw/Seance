@@ -5,6 +5,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "seance",
+    "platforms": ["ios", "android"],
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -20,7 +21,10 @@
       }
     },
     "android": {
-      "permissions": ["CAMERA", "RECORD_AUDIO"]
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
     },
     "plugins": [
       [
@@ -41,7 +45,8 @@
         {
           "microphonePermission": "Séance needs your microphone so you can talk to the character."
         }
-      ]
+      ],
+      "expo-asset"
     ]
   }
 }
