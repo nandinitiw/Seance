@@ -8,7 +8,9 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test:persona": "tsx scripts/test-persona.ts"
+    "test:persona": "tsx scripts/test-persona.ts",
+    "test:gemini": "tsx scripts/test-gemini.ts",
+    "prebake": "tsx scripts/prebake.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",

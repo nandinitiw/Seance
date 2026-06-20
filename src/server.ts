@@ -2,12 +2,17 @@ import express from "express";
 import multer from "multer";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { config, logCapabilities } from "./config.js";
+import { config, caps, logCapabilities } from "./config.js";
 import { awaken, reply, type ImageInput } from "./lib/claude.js";
-import { paintPortrait } from "./lib/imagegen.js";
+import { paintPortrait, generateMysteryPortrait } from "./lib/imagegen.js";
 import { transcribe, speak } from "./lib/deepgram.js";
 import { loadState, saveState } from "./lib/memory.js";
 import type { SessionState } from "./types.js";
+
+/** Normalize objectKey so Redis lookups are stable regardless of Claude's exact casing/spacing. */
+function normalizeKey(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -38,14 +43,19 @@ app.post("/api/awaken", async (req, res) => {
 
     // 1. Channel the character from the photo.
     const persona = await awaken(input);
+    persona.objectKey = normalizeKey(persona.objectKey);
 
     // 2. Has this object been awakened before? (memory / the "remembers you" beat)
     const prior = await loadState(persona.objectKey);
 
     // 3. Paint the portrait (skip if we already have one for this object).
-    //    NOTE (Task 2): persona.objectRecognized is now available here — branch to a
-    //    generated fallback portrait when it's false instead of using the raw photo.
-    const portraitUrl = prior?.portraitUrl ?? (await paintPortrait(persona, image));
+    //    Unrecognized objects get a Pollinations mystery creature instead of
+    //    the normal image-gen path.
+    const portraitUrl =
+      prior?.portraitUrl ??
+      (persona.objectRecognized
+        ? await paintPortrait(persona, image)
+        : await generateMysteryPortrait(image));
 
     const state: SessionState = {
       persona: prior?.persona ?? persona,
@@ -109,6 +119,16 @@ app.post("/api/converse", upload.single("audio"), async (req, res) => {
     console.error("converse failed:", err);
     res.status(500).json({ error: String(err) });
   }
+});
+
+/** GET /api/status — quick capability check for integration debugging. */
+app.get("/api/status", (_req, res) => {
+  res.json({
+    anthropic: caps.hasAnthropic,
+    deepgram: caps.hasDeepgram,
+    redis: caps.hasRedis,
+    imageProvider: config.imageProvider,
+  });
 });
 
 /**
