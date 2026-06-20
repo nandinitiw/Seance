@@ -29,7 +29,7 @@ export const config = {
   fireflyClientSecret: process.env.ADOBE_FIREFLY_CLIENT_SECRET ?? "",
   midjourneyProxyUrl: process.env.MIDJOURNEY_PROXY_URL ?? "",
   geminiKey: process.env.GEMINI_API_KEY ?? "",
-  geminiImageModel: process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-preview-image",
+  geminiImageModel: process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image",
 
   redisUrl: process.env.REDIS_URL ?? "",
 };
