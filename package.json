@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:persona": "tsx scripts/test-persona.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",

@@ -4,3 +4,7 @@ dist/
 .env.local
 *.log
 .DS_Store
+
+# Local test fixtures — stock object photos for scripts/test-persona.ts.
+# Not committed (mixed-license stock images); drop your own photos here to run the test.
+scripts/sample-images/
