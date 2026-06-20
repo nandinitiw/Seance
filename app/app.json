@@ -13,6 +13,7 @@
       "backgroundColor": "#0b0612"
     },
     "ios": {
+      "bundleIdentifier": "com.aishanisingh.seance",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Séance needs your camera to see the object you want to awaken.",
@@ -21,6 +22,7 @@
       }
     },
     "android": {
+      "package": "com.aishanisingh.seance",
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO"

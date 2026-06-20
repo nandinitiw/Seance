@@ -4,6 +4,10 @@ dist/
 web-build/
 node_modules/
 
+# Native projects — regenerated from app.json via `expo prebuild` (CNG)
+/ios/
+/android/
+
 # Native
 *.orig.*
 *.jks
