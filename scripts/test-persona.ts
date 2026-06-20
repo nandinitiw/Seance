@@ -5,17 +5,17 @@
  *   npm run test:persona mug shoe   # only images whose filename contains "mug" or "shoe"
  *
  * For each photo it runs the real awaken() pipeline (vision → Claude → persona)
- * and then one reply() turn so you can read the character's opening line aloud
- * and judge whether it's actually funny. With no ANTHROPIC_API_KEY set it runs
- * the mock path (and says so), so this never hard-fails.
+ * and prints the persona — including the in-character openingLine — so you can
+ * read it aloud and judge whether it's actually funny. With no ANTHROPIC_API_KEY
+ * set it runs the mock path (and says so), so this never hard-fails.
  *
  * Run with tsx (already a devDependency): `npx tsx scripts/test-persona.ts`.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join, extname, basename } from "node:path";
+import { dirname, join, extname } from "node:path";
 import { caps } from "../src/config.js";
-import { awaken, reply } from "../src/lib/claude.js";
+import { awaken } from "../src/lib/claude.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const IMAGES_DIR = join(here, "sample-images");
@@ -27,9 +27,6 @@ const MEDIA_TYPES: Record<string, string> = {
   ".webp": "image/webp",
   ".gif": "image/gif",
 };
-
-// The line we "speak" to each freshly-awakened object to elicit an opening line.
-const OPENER = "Hello? Is someone in there?";
 
 function pickImages(): string[] {
   let files: string[];
@@ -67,7 +64,6 @@ async function run() {
   let failed = 0;
 
   for (const file of images) {
-    const label = basename(file, extname(file));
     divider(`📷  ${file}`);
 
     const mediaType = MEDIA_TYPES[extname(file).toLowerCase()]!;
@@ -75,30 +71,28 @@ async function run() {
 
     const started = Date.now();
     try {
-      const persona = await awaken(base64, mediaType);
-      const opening = await reply(persona, [], OPENER, 1);
+      const persona = await awaken({ base64, mediaType });
       const ms = Date.now() - started;
 
+      console.log(`  recognized   : ${persona.objectRecognized ? "yes" : "NO → portrait fallback"}`);
       console.log(`  object       : ${persona.object}`);
-      console.log(`  objectKey    : ${persona.objectKey}`);
+      console.log(`  archetype    : ${persona.archetype}`);
       console.log(`  name         : ${persona.name}`);
       console.log(`  tagline      : ${persona.tagline}`);
       console.log(`  traits       : ${persona.traits.join(", ")}`);
       console.log(`  voiceModel   : ${persona.voiceModel}`);
       console.log(`  backstory    : ${persona.backstory}`);
       console.log(`  portrait     : ${persona.portraitPrompt}`);
-      console.log(`  ── speak it ──────────────────────────────────`);
-      console.log(`  you          : ${OPENER}`);
-      console.log(`  ${persona.name}: ${opening}`);
+      console.log(`  ── say it out loud ───────────────────────────`);
+      console.log(`  ${persona.name}: ${persona.openingLine}`);
       console.log(`  (${ms} ms)`);
 
-      // Surface the fallback persona so a degraded result is obvious, not silent.
       if (persona.objectKey === "unidentified-object") {
-        console.log("  ⚠️  fell back to the canned persona (check logs above)");
+        console.log("  ⚠️  canned fallback persona (Claude failed/validation failed — check logs)");
       }
       ok++;
     } catch (err) {
-      // awaken/reply already swallow their own errors, but guard the harness anyway.
+      // awaken swallows its own errors, but guard the harness anyway.
       console.error(`  ✖ pipeline threw: ${err instanceof Error ? err.message : String(err)}`);
       failed++;
     }

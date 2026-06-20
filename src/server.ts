@@ -3,7 +3,7 @@ import multer from "multer";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { config, logCapabilities } from "./config.js";
-import { awaken, reply } from "./lib/claude.js";
+import { awaken, reply, type ImageInput } from "./lib/claude.js";
 import { paintPortrait } from "./lib/imagegen.js";
 import { transcribe, speak } from "./lib/deepgram.js";
 import { loadState, saveState } from "./lib/memory.js";
@@ -18,27 +18,34 @@ app.use(express.static(join(__dirname, "..", "public")));
 
 /**
  * POST /api/awaken
- * Body: { image: "data:image/jpeg;base64,..." }
+ * Body: { image: "data:image/jpeg;base64,..." | "https://..." }
  * Pipeline: photo → Claude invents persona → paint portrait → load/save memory.
  * Returns the persona + portrait + how many times this object has been met.
  */
 app.post("/api/awaken", async (req, res) => {
   try {
-    const dataUrl: string = req.body.image;
-    if (!dataUrl?.startsWith("data:")) {
-      return res.status(400).json({ error: "Expected { image: dataURL }" });
+    const image: string = req.body.image;
+    let input: ImageInput;
+    if (image?.startsWith("data:")) {
+      const [, mediaType = "image/jpeg", base64 = ""] =
+        image.match(/^data:([^;]+);base64,(.+)$/) ?? [];
+      input = { base64, mediaType };
+    } else if (/^https?:\/\//.test(image ?? "")) {
+      input = { url: image };
+    } else {
+      return res.status(400).json({ error: "Expected { image: dataURL | https URL }" });
     }
-    const [, mediaType = "image/jpeg", base64 = ""] =
-      dataUrl.match(/^data:([^;]+);base64,(.+)$/) ?? [];
 
     // 1. Channel the character from the photo.
-    const persona = await awaken(base64, mediaType);
+    const persona = await awaken(input);
 
     // 2. Has this object been awakened before? (memory / the "remembers you" beat)
     const prior = await loadState(persona.objectKey);
 
     // 3. Paint the portrait (skip if we already have one for this object).
-    const portraitUrl = prior?.portraitUrl ?? (await paintPortrait(persona, dataUrl));
+    //    NOTE (Task 2): persona.objectRecognized is now available here — branch to a
+    //    generated fallback portrait when it's false instead of using the raw photo.
+    const portraitUrl = prior?.portraitUrl ?? (await paintPortrait(persona, image));
 
     const state: SessionState = {
       persona: prior?.persona ?? persona,

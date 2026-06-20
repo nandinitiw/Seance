@@ -2,7 +2,24 @@
 // Claude invents it from a photo, the image generator paints it, Deepgram voices
 // it, and Redis remembers it.
 
+/** The fixed comedic registers Claude slots an object into. Keep in sync with
+ *  ARCHETYPES in src/lib/claude.ts. */
+export type Archetype =
+  | "grumpy_elder"
+  | "dramatic_diva"
+  | "deadpan_stoic"
+  | "anxious_overachiever";
+
 export interface Persona {
+  /**
+   * Whether Claude confidently identified a real object in the photo. When
+   * false (blurry shot, no clear object, a scene rather than a thing) the
+   * persona is still a valid generic character, but the image hop should paint
+   * a generated fallback portrait instead of using the raw photo.
+   */
+  objectRecognized: boolean;
+  /** The comedic archetype Claude slotted this object into. */
+  archetype: Archetype;
   /** Stable id derived from the object Claude sees (e.g. "stapler-red-stout"). */
   objectKey: string;
   /** The object as identified, plain words: "a red stapler". */
@@ -11,6 +28,8 @@ export interface Persona {
   name: string;
   /** One-line hook shown in the UI under the portrait. */
   tagline: string;
+  /** The character's first spoken line, in voice, ready to play on awaken. */
+  openingLine: string;
   /** 2–3 sentence backstory used to seed the conversation + portrait prompt. */
   backstory: string;
   /** Adjectives that define the voice & attitude, e.g. ["bitter", "regal"]. */
