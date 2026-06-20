@@ -96,7 +96,7 @@ async function paintWithGemini(persona: Persona): Promise<string> {
   if (!config.geminiKey) throw new Error("GEMINI_API_KEY not set");
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${config.geminiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${config.geminiImageModel}:generateContent?key=${config.geminiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
