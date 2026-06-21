@@ -19,6 +19,7 @@ import Svg, { Defs, Pattern, Circle, Rect } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { awaken, type AwakenResponse } from '../src/api';
 import { sessionStore } from '../src/sessionStore';
+import { Face } from '../src/components/AliveAvatar';
 import { C, FONTS, SP } from '../src/theme';
 
 // ── Log lines ─────────────────────────────────────────────────────────────────
@@ -318,6 +319,8 @@ export default function AwakenScreen() {
               </Defs>
               <Rect width="100%" height="100%" fill="url(#dots)" opacity="0.4" />
             </Svg>
+            {/* The object stirs awake — idle eyes + mouth while channeling. */}
+            {imageDataUrl ? <Face speaking={false} size={190} /> : null}
           </Animated.View>
         </View>
 

@@ -135,6 +135,8 @@ function SpiritCard({ result, speaking }: { result: AwakenResponse; speaking: bo
           archetype={persona.archetype}
           speaking={speaking}
           style={cs.photo}
+          face
+          size={176}
         />
         <LinearGradient
           colors={['rgba(255,90,56,0.16)', 'transparent', 'rgba(52,183,160,0.14)']}

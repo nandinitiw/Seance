@@ -175,7 +175,7 @@ export function AliveAvatar({
 // ── Eyes + lips overlay ─────────────────────────────────────────────────────────
 // Cartoon features stuck onto the object, googly-eyes style: the eyes blink on an
 // idle timer and the lips open and close while the spirit is speaking.
-function Face({ speaking, size }: { speaking: boolean; size: number }) {
+export function Face({ speaking, size }: { speaking: boolean; size: number }) {
   const mouth = useRef(new Animated.Value(0)).current; // 0 closed → 1 open
   const blink = useRef(new Animated.Value(1)).current; // 1 open → ~0 shut (scaleY)
   const gaze = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current; // pupils drift around

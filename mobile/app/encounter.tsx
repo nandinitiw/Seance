@@ -21,6 +21,7 @@ import Svg, { Defs, Pattern, Circle, Rect } from "react-native-svg";
 import { Audio } from "expo-av";
 import { encounter, tts, type EncounterLine, type EncounterResponse } from "../src/api";
 import { sessionStore } from "../src/sessionStore";
+import { AliveAvatar } from "../src/components/AliveAvatar";
 import { C, FONTS, SP } from "../src/theme";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -54,11 +55,13 @@ function HalftoneOverlay() {
 function PortraitCard({
   name,
   portraitUrl,
+  archetype,
   active,
   align,
 }: {
   name: string;
   portraitUrl: string;
+  archetype: string;
   active: boolean;
   align: "left" | "right";
 }) {
@@ -85,7 +88,14 @@ function PortraitCard({
     <View style={styles.portraitCol}>
       <Animated.View style={[styles.portraitFrame, { borderColor, shadowOpacity, shadowColor: activeColor }]}>
         {portraitUrl ? (
-          <Image source={{ uri: portraitUrl }} style={styles.portraitImg} resizeMode="cover" />
+          <AliveAvatar
+            portraitUrl={portraitUrl}
+            archetype={archetype}
+            speaking={active}
+            style={styles.portraitImg}
+            face
+            size={130}
+          />
         ) : (
           <View style={styles.portraitPlaceholder} />
         )}
@@ -262,6 +272,7 @@ export default function EncounterScreen() {
           <PortraitCard
             name={persona1.name}
             portraitUrl={portraitUrl1}
+            archetype={persona1.archetype}
             active={lines[currentLine]?.speaker === "object1"}
             align="left"
           />
@@ -271,6 +282,7 @@ export default function EncounterScreen() {
           <PortraitCard
             name={persona2.name}
             portraitUrl={portraitUrl2}
+            archetype={persona2.archetype}
             active={lines[currentLine]?.speaker === "object2"}
             align="right"
           />
