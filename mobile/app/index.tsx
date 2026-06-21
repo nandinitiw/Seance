@@ -4,8 +4,9 @@
  */
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { sessionStore } from '../src/sessionStore';
 import {
   ActivityIndicator,
   Animated,
@@ -66,6 +67,11 @@ export default function CaptureScreen() {
   const scanAnim = useRef(new Animated.Value(0)).current;
   const redDotOpacity = useRef(new Animated.Value(0.5)).current;
 
+  // Idempotent navigation: reset every time this screen regains focus, so a
+  // double-tap can't push two awaken screens (and two awaken() calls).
+  const navLock = useRef(false);
+  useFocusEffect(useCallback(() => { navLock.current = false; }, []));
+
   useEffect(() => {
     Animated.loop(
       Animated.timing(scanAnim, { toValue: 1, duration: 3600, useNativeDriver: true })
@@ -88,7 +94,7 @@ export default function CaptureScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       base64: true,
-      quality: 0.8,
+      quality: 0.5,
     });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -108,7 +114,7 @@ export default function CaptureScreen() {
     }
     const result = await ImagePicker.launchCameraAsync({
       base64: true,
-      quality: 0.8,
+      quality: 0.5,
     });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -126,19 +132,20 @@ export default function CaptureScreen() {
     ]).start();
   }
 
-  async function handleSummon() {
+  function handleSummon() {
     if (!photo) {
       setError('Photograph an object first');
       return;
     }
+    if (navLock.current) return; // ignore double-taps
+    navLock.current = true;
     onPressBtn();
-    setLoading(true);
     setError(null);
-    try {
-      router.push({ pathname: '/awaken', params: { imageDataUrl: photo } });
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true); // stays true through the transition; resets on screen remount
+    // Hand the photo off by reference instead of through nav params (it's a
+    // multi-MB data URL — serializing it into navigation state stalls the JS thread).
+    sessionStore.setImage(photo);
+    router.push('/awaken');
   }
 
   return (

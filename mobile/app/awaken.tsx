@@ -4,12 +4,13 @@
  * Calls awaken() API, animates progress + log lines, then navigates to /reveal.
  */
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   Image,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -17,6 +18,7 @@ import {
 import Svg, { Defs, Pattern, Circle, Rect } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { awaken, type AwakenResponse } from '../src/api';
+import { sessionStore } from '../src/sessionStore';
 import { C, FONTS, SP } from '../src/theme';
 
 // ── Log lines ─────────────────────────────────────────────────────────────────
@@ -95,11 +97,12 @@ function LogLine({ text, index, visibleCount }: { text: string; index: number; v
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function AwakenScreen() {
-  const { imageDataUrl } = useLocalSearchParams<{ imageDataUrl: string }>();
+  const imageDataUrl = sessionStore.getImage();
 
   const [visibleLogCount, setVisibleLogCount] = useState(0);
   const [statusText, setStatusText] = useState('channeling');
   const [progressPct, setProgressPct] = useState(0);
+  const [failed, setFailed] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const breatheAnim = useRef(new Animated.Value(1)).current;
@@ -110,22 +113,26 @@ export default function AwakenScreen() {
   const navigatedRef = useRef(false);
 
   function attemptNavigate() {
-    if (apiDoneRef.current && minTimeRef.current && !navigatedRef.current) {
+    if (
+      apiDoneRef.current &&
+      minTimeRef.current &&
+      !navigatedRef.current &&
+      resultRef.current
+    ) {
       navigatedRef.current = true;
-      router.replace({
-        pathname: '/reveal',
-        params: { personaJson: JSON.stringify(resultRef.current) },
-      });
+      sessionStore.setResult(resultRef.current);
+      router.replace('/reveal'); // result handed off via the store, not params
     }
   }
 
   useEffect(() => {
-    // Progress bar animation over ~3.2s
+    // Creep to 90% over ~6s; the final 10% only fills when the spirit actually
+    // arrives — so a slow API reads as "still working", never frozen at 100%.
     progressAnim.addListener(({ value }) => setProgressPct(Math.round(value * 100)));
     Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: 3200,
-      easing: Easing.inOut(Easing.quad),
+      toValue: 0.9,
+      duration: 6000,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     }).start();
 
@@ -163,23 +170,30 @@ export default function AwakenScreen() {
       attemptNavigate();
     }, MIN_DISPLAY_MS);
 
-    // Call the API
+    // Call the API. On success we stash the result and fill the bar; on failure
+    // we stay here with a retry, never navigating to a broken reveal screen.
     if (imageDataUrl) {
       awaken(imageDataUrl)
         .then((result) => {
           resultRef.current = result;
           apiDoneRef.current = true;
           setStatusText('spirit found');
+          Animated.timing(progressAnim, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: false,
+          }).start();
           attemptNavigate();
         })
         .catch((err) => {
           console.error('awaken error', err);
-          // Still navigate after min time with null (reveal screen handles error)
-          resultRef.current = null;
-          apiDoneRef.current = true;
           setStatusText('signal lost');
-          attemptNavigate();
+          setFailed(true);
         });
+    } else {
+      // Landed here with no captured image (e.g. a dev reload cleared the store).
+      setStatusText('signal lost');
+      setFailed(true);
     }
 
     return () => {
@@ -195,6 +209,35 @@ export default function AwakenScreen() {
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
   });
+
+  // Failure: the spirit never took form. Offer a way back instead of trapping
+  // the user on a dead-end screen with no navigation.
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <LinearGradient
+          colors={['#241C16', '#100C0A']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <GrainOverlay />
+        <View style={styles.content}>
+          <Text style={styles.failTitle}>the connection wavered</Text>
+          <Text style={styles.failHint}>
+            The spirit slipped away before it could take form. Make sure the
+            séance server is running, then try again.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.85 }]}
+            onPress={() => router.replace('/')}
+          >
+            <Text style={styles.retryBtnText}>Summon another →</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -262,7 +305,7 @@ export default function AwakenScreen() {
 
         {/* Progress labels */}
         <View style={styles.progressLabels}>
-          <Text style={styles.channelingLabel}>CHANNELING</Text>
+          <Text style={styles.channelingLabel}>{statusText.toUpperCase()}</Text>
           <Text style={styles.pctLabel}>{progressPct}%</Text>
         </View>
 
@@ -420,5 +463,37 @@ const styles = StyleSheet.create({
   logTextDone: {
     color: '#8A7C68',
     opacity: 0.7,
+  },
+
+  // Failure state
+  failTitle: {
+    fontFamily: FONTS.serif,
+    fontSize: 30,
+    color: C.textLight,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  failHint: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: C.textDim,
+    textAlign: 'center',
+    lineHeight: 19,
+    letterSpacing: 0.4,
+    marginBottom: 28,
+    paddingHorizontal: SP.md,
+  },
+  retryBtn: {
+    backgroundColor: '#D93D1A',
+    borderWidth: 1,
+    borderColor: '#7A1F0C',
+    borderRadius: 10,
+    paddingVertical: 15,
+    paddingHorizontal: 32,
+  },
+  retryBtnText: {
+    fontFamily: FONTS.serif,
+    fontSize: 20,
+    color: '#F0E7D6',
   },
 });
