@@ -22,7 +22,13 @@ type Props = NativeStackScreenProps<RootStackParamList, "Capture">;
 
 // The séance begins here: point the back camera at an object, snap it, and
 // hand a JPEG data-URL off to the Awakening screen to be channeled.
-export default function CaptureScreen({ navigation }: Props) {
+function slugToLabel(key: string): string {
+  return key.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export default function CaptureScreen({ navigation, route }: Props) {
+  const challengerKey = (route.params as any)?.challengerKey as string | undefined;
+  const challengerLabel = challengerKey ? slugToLabel(challengerKey) : undefined;
   const cameraRef = useRef<CameraView>(null);
   const [camPerm, requestCamPerm] = useCameraPermissions();
   // Pre-warm the mic so the later voice chat doesn't prompt cold. We never
@@ -56,6 +62,7 @@ export default function CaptureScreen({ navigation }: Props) {
     }
     navigation.navigate("Awakening", {
       imageDataUrl: `data:image/jpeg;base64,${base64}`,
+      ...(challengerKey ? { challengerKey } : {}),
     });
   }
 
@@ -150,7 +157,13 @@ export default function CaptureScreen({ navigation }: Props) {
     <Shell>
       <View style={styles.header}>
         <Text style={styles.title}>🔮 Séance</Text>
-        <Text style={styles.subtitle}>Point at any object. Wake the spirit inside.</Text>
+        {challengerLabel ? (
+          <View style={styles.rivalBanner}>
+            <Text style={styles.rivalBannerText}>⚔  Finding a rival for {challengerLabel}</Text>
+          </View>
+        ) : (
+          <Text style={styles.subtitle}>Point at any object. Wake the spirit inside.</Text>
+        )}
       </View>
 
       <View style={styles.viewport}>
@@ -164,7 +177,7 @@ export default function CaptureScreen({ navigation }: Props) {
 
       <View style={styles.controls}>
         <PrimaryButton
-          label={busy ? "Channeling…" : "Awaken what I'm pointing at"}
+          label={busy ? "Channeling…" : challengerLabel ? "Awaken the rival" : "Awaken what I'm pointing at"}
           onPress={handleCapture}
           disabled={busy}
           loading={busy}
@@ -241,6 +254,20 @@ const styles = StyleSheet.create({
   },
   title: { ...font.display, letterSpacing: 1 },
   subtitle: { ...font.caption, textAlign: "center" },
+  rivalBanner: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: "rgba(230,175,60,0.10)",
+  },
+  rivalBannerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.accent,
+    textAlign: "center",
+  },
 
   // Camera preview frame.
   viewport: {

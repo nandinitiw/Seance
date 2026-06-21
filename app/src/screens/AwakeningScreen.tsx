@@ -52,7 +52,11 @@ export default function AwakeningScreen({ navigation, route }: Props) {
         await new Promise<void>((r) => setTimeout(r, remaining));
         if (cancelled) return;
         // replace (not navigate) so back never lands on the loader again.
-        navigation.replace("Reveal", { result, imageDataUrl: route.params.imageDataUrl });
+        navigation.replace("Reveal", {
+          result,
+          imageDataUrl: route.params.imageDataUrl,
+          ...(route.params.challengerKey ? { challengerKey: route.params.challengerKey } : {}),
+        });
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));

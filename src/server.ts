@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { config, caps, logCapabilities } from "./config.js";
-import { awaken, reply, type ImageInput } from "./lib/claude.js";
+import { awaken, reply, generateEncounter, type ImageInput } from "./lib/claude.js";
 import { paintPortrait, generateMysteryPortrait } from "./lib/imagegen.js";
 import { transcribe, speak } from "./lib/deepgram.js";
 import { loadState, saveState } from "./lib/memory.js";
@@ -201,6 +201,31 @@ app.post("/api/turns", async (req, res) => {
   }
   await saveState(state);
   res.json({ ok: true });
+});
+
+/**
+ * POST /api/encounter
+ * Body: { objectKey1: string, objectKey2: string }
+ * Generates a scripted 6-line scene between two awakened objects.
+ * Returns { lines: EncounterLine[], persona1: Persona, persona2: Persona }
+ */
+app.post("/api/encounter", async (req, res) => {
+  const { objectKey1, objectKey2 } = req.body as { objectKey1: string; objectKey2: string };
+  if (!objectKey1 || !objectKey2) {
+    return res.status(400).json({ error: "objectKey1 and objectKey2 are required." });
+  }
+  const [state1, state2] = await Promise.all([loadState(objectKey1), loadState(objectKey2)]);
+  if (!state1) return res.status(404).json({ error: `Unknown object: ${objectKey1}` });
+  if (!state2) return res.status(404).json({ error: `Unknown object: ${objectKey2}` });
+
+  const lines = await generateEncounter(state1.persona, state2.persona);
+  res.json({
+    lines,
+    persona1: state1.persona,
+    persona2: state2.persona,
+    portraitUrl1: state1.portraitUrl,
+    portraitUrl2: state2.portraitUrl,
+  });
 });
 
 app.listen(config.port, () => {

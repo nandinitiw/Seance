@@ -48,6 +48,13 @@ export interface Turn {
   text: string;
 }
 
+/** One line in an object encounter scene. */
+export interface EncounterLine {
+  /** Which object speaks this line. */
+  speaker: "object1" | "object2";
+  text: string;
+}
+
 /** Everything we persist per awakened object. */
 export interface SessionState {
   persona: Persona;

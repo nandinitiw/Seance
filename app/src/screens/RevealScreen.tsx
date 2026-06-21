@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -15,16 +15,17 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation";
 import { resolveMediaUrl } from "../config";
 import { colors, spacing, radius, font } from "../theme";
-import { converse } from "../api/client";
+import { converse, encounter } from "../api/client";
 
 // REVEAL — the payoff. The portrait fades + scales in like it's being conjured,
 // then the character speaks its opening line unprompted.
 type Props = NativeStackScreenProps<RootStackParamList, "Reveal">;
 
 export default function RevealScreen({ route, navigation }: Props) {
-  const { result } = route.params;
+  const { result, challengerKey } = route.params;
   const { persona } = result;
   const traits = persona.traits ?? [];
+  const [encountering, setEncountering] = useState(false);
 
   // Conjuring animation: fade + scale the whole portrait frame in on mount.
   const appear = useRef(new Animated.Value(0)).current;
@@ -45,6 +46,7 @@ export default function RevealScreen({ route, navigation }: Props) {
   useEffect(() => {
     let cancelled = false;
     async function speakOpeningLine() {
+      if (!persona.openingLine) return;
       try {
         const data = await converse({
           objectKey: persona.objectKey,
@@ -70,6 +72,28 @@ export default function RevealScreen({ route, navigation }: Props) {
       soundRef.current?.unloadAsync().catch(() => {});
     };
   }, [persona.objectKey, persona.openingLine]);
+
+  // If this object was awakened as the challenger, immediately trigger the encounter.
+  const triggerEncounter = useCallback(async (challengerObjectKey: string) => {
+    setEncountering(true);
+    try {
+      // challengerKey is object1, current object is object2.
+      const data = await encounter(challengerObjectKey, persona.objectKey);
+      navigation.replace("Encounter", {
+        lines: data.lines,
+        persona1: data.persona1,
+        persona2: data.persona2,
+        portraitUrl1: data.portraitUrl1,
+        portraitUrl2: data.portraitUrl2,
+      });
+    } catch {
+      setEncountering(false);
+    }
+  }, [persona.objectKey, navigation]);
+
+  useEffect(() => {
+    if (challengerKey) triggerEncounter(challengerKey);
+  }, [challengerKey, triggerEncounter]);
 
   const portraitUri = resolveMediaUrl(result.portraitUrl);
 
@@ -151,6 +175,16 @@ export default function RevealScreen({ route, navigation }: Props) {
           onPress={() => navigation.navigate("Conversation", { result })}
         >
           <Text style={styles.primaryText}>Talk to it</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.rival, pressed && styles.rivalPressed]}
+          onPress={() => navigation.navigate("Capture", { challengerKey: persona.objectKey } as any)}
+          disabled={encountering}
+        >
+          <Text style={styles.rivalText}>
+            {encountering ? "Setting up the encounter…" : "⚔  Find it a rival"}
+          </Text>
         </Pressable>
 
         <Pressable
@@ -298,6 +332,21 @@ const styles = StyleSheet.create({
     color: colors.bg,
   },
 
+  rival: {
+    alignSelf: "stretch",
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    alignItems: "center",
+  },
+  rivalPressed: { opacity: 0.6 },
+  rivalText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.accent,
+  },
   secondary: {
     alignSelf: "stretch",
     marginTop: spacing.sm,
