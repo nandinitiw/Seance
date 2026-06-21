@@ -34,6 +34,20 @@ function formatDate(): string {
   return `${mm}·${dd}·${yy}`;
 }
 
+// The card shows an evocative voice descriptor, not the raw Deepgram model id.
+// Personas only ever use these 5 aura-2 voices (see VOICE_MODELS in claude.ts).
+const VOICE_DESCRIPTORS: Record<string, string> = {
+  "aura-2-thalia-en": "warm · lilting",
+  "aura-2-orion-en": "deep · grave",
+  "aura-2-luna-en": "bright · spry",
+  "aura-2-arcas-en": "dry · easy",
+  "aura-2-zeus-en": "booming · regal",
+};
+
+function voiceDescriptor(voiceModel: string): string {
+  return VOICE_DESCRIPTORS[voiceModel] ?? "gravel · theatrical";
+}
+
 // ── Trait chip ────────────────────────────────────────────────────────────────
 
 function TraitChip({ label }: { label: string }) {
@@ -163,13 +177,13 @@ function SpiritCard({ result }: { result: AwakenResponse }) {
       <View style={cs.statsRow}>
         <View style={cs.statItem}>
           <Text style={cs.statLabel}>ENCOUNTERS</Text>
-          <Text style={cs.statValue}>{encounters}</Text>
+          <Text style={cs.statValue}>×{encounters}</Text>
         </View>
         <View style={cs.statDividerLine} />
         <View style={cs.statItem}>
           <Text style={cs.statLabel}>VOICE</Text>
           <Text style={cs.statValueMono}>
-            {persona.voiceModel || "gravel · theatrical"}
+            {voiceDescriptor(persona.voiceModel)}
           </Text>
         </View>
       </View>
