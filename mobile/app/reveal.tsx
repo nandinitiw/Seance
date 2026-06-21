@@ -8,8 +8,8 @@
  * then lets the user begin the séance or summon another object.
  */
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Defs, Pattern, Circle, Rect } from "react-native-svg";
-import type { AwakenResponse } from "../src/api";
+import { encounter, type AwakenResponse } from "../src/api";
 import { sessionStore } from "../src/sessionStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -208,6 +208,9 @@ function SpiritCard({ result }: { result: AwakenResponse }) {
 
 export default function RevealScreen() {
   const result = sessionStore.getResult();
+  // When this object was awakened as the second of a rival pairing, the first
+  // object's AwakenResponse is passed in as a JSON param to trigger the encounter.
+  const { challengerJson } = useLocalSearchParams<{ challengerJson?: string }>();
 
   // Idempotent navigation — reset on focus so returning from the conversation
   // (router.back) re-arms the button, but a double-tap can't push twice.
@@ -226,7 +229,6 @@ export default function RevealScreen() {
     (async () => {
       try {
         const challenger = JSON.parse(challengerJson) as AwakenResponse;
-        const { encounter } = await import("../src/api");
         const data = await encounter(challenger.persona.objectKey, objectKey2);
         if (cancelled) return;
         router.replace({
@@ -270,9 +272,11 @@ export default function RevealScreen() {
   };
 
   const handleIntroduce = () => {
+    // Carry THIS awakened object forward as the challenger; the capture screen
+    // awakens a second object and the pair meet on the encounter screen.
     router.push({
       pathname: "/",
-      params: { challengerJson: personaJson },
+      params: { challengerJson: JSON.stringify(result) },
     });
   };
 
