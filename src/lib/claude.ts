@@ -114,102 +114,43 @@ const VOICE_MODELS = [
 // model literally cannot emit markdown fences or preamble, only schema-shaped
 // input. We still validate defensively (see validatePersona).
 
-const PERSONA_PROPERTIES = {
-  objectRecognized: {
-    type: "boolean",
-    description:
-      "true ONLY if you can confidently identify a specific, real physical object in the photo. Set false if the image is blurry/dark, shows no clear single object, or is dominated by a person or scene rather than a thing. When false, still invent a fun generic persona.",
-  },
-  archetype: {
-    type: "string",
-    enum: ARCHETYPE_KEYS,
-    description: "The best-fit comedic archetype for this object.",
-  },
-  objectKey: {
-    type: "string",
-    description:
-      "lowercase-hyphenated slug for this KIND of object, e.g. 'red-stapler'. The same kind of object must always yield the same key so memory can find it.",
-  },
-  object: {
-    type: "string",
-    description: "Plain identification, e.g. 'a red stapler'.",
-  },
-  name: {
-    type: "string",
-    description: "A characterful, funny name for the persona.",
-  },
-  tagline: {
-    type: "string",
-    description: "One witty line shown under the portrait.",
-  },
-  openingLine: {
-    type: "string",
-    description:
-      "The character's first spoken line, fully in voice — the funny thing it says the instant it wakes up and notices a human. One or two sentences.",
-  },
-  backstory: {
-    type: "string",
-    description: "2-3 vivid, funny sentences of who this object secretly is.",
-  },
-  traits: {
-    type: "array",
-    items: { type: "string" },
-    description: "3-5 personality adjectives that fit the archetype.",
-  },
-  voiceModel: {
-    type: "string",
-    enum: VOICE_MODELS,
-    description: "The Deepgram TTS voice id that best fits the character.",
-  },
-  systemPrompt: {
-    type: "string",
-    description:
-      "A second-person system prompt that makes an AI fully embody this character in a SPOKEN conversation: voice, quirks, opinions. It MUST instruct keeping replies to 1-3 sentences (they're spoken aloud) and to never break character.",
-  },
-  portraitPrompt: {
-    type: "string",
-    description:
-      "An image-gen prompt to paint this object as an anthropomorphic character portrait, matching its real colors/shape, with an expressive face and dramatic lighting.",
-  },
-} as const;
-
-const PERSONA_REQUIRED = [
-  "objectRecognized",
-  "archetype",
-  "objectKey",
-  "object",
-  "name",
-  "tagline",
-  "openingLine",
-  "backstory",
-  "traits",
-  "voiceModel",
-  "systemPrompt",
-  "portraitPrompt",
-];
-
-const EMIT_PERSONAS_TOOL: Anthropic.Tool = {
-  name: "emit_personas",
+// Fast triage tool for the persona picker. Instead of generating three full
+// personas in one slow call, we first do a cheap call that only identifies the
+// object and picks three distinct archetypes — then fan out three full persona
+// generations in parallel (see awakenAll). This trades one ~35s sequential call
+// for a ~3s triage plus ~15s of concurrent generation.
+const PICK_ARCHETYPES_TOOL: Anthropic.Tool = {
+  name: "pick_archetypes",
   description:
-    "Emit three distinct, ranked personas living inside the photographed object. Each must have a genuinely different archetype, name, and personality angle. Rank them best-fit first.",
+    "Identify the photographed object and choose three DISTINCT, ranked comedic archetypes for the characters that could live inside it.",
   input_schema: {
     type: "object",
     additionalProperties: false,
     properties: {
-      personas: {
+      objectRecognized: {
+        type: "boolean",
+        description:
+          "true ONLY if you can confidently identify a specific, real physical object in the photo. Set false if the image is blurry/dark, shows no clear single object, or is dominated by a person or scene rather than a thing.",
+      },
+      object: {
+        type: "string",
+        description: "Plain identification, e.g. 'a red stapler'.",
+      },
+      objectKey: {
+        type: "string",
+        description:
+          "lowercase-hyphenated slug for this KIND of object, e.g. 'red-stapler'. The same kind of object must always yield the same key so memory can find it.",
+      },
+      archetypes: {
         type: "array",
         minItems: 3,
         maxItems: 3,
-        description: "Exactly 3 personas, ranked best-fit first.",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: PERSONA_PROPERTIES,
-          required: PERSONA_REQUIRED,
-        },
+        items: { type: "string", enum: ARCHETYPE_KEYS },
+        description:
+          "Exactly three DISTINCT archetypes, ranked best-fit first. Pick the three funniest, most fitting angles on this object's inner life — no duplicates.",
       },
     },
-    required: ["personas"],
+    required: ["objectRecognized", "object", "objectKey", "archetypes"],
   },
 };
 
@@ -299,7 +240,7 @@ const EMIT_PERSONA_TOOL: Anthropic.Tool = {
       systemPrompt: {
         type: "string",
         description:
-          "A second-person system prompt that makes an AI fully embody this character in a SPOKEN conversation: voice, quirks, opinions. It MUST instruct keeping replies to 1-3 sentences (they're spoken aloud) and to never break character.",
+          "A second-person system prompt that makes an AI fully embody this character in a SPOKEN conversation: voice, quirks, opinions. It MUST instruct keeping replies to 1-2 sentences maximum (they're spoken aloud) and to never break character.",
       },
       portraitPrompt: {
         type: "string",
@@ -325,7 +266,7 @@ const EMIT_PERSONA_TOOL: Anthropic.Tool = {
   },
 };
 
-function systemPrompt(multi = false): string {
+function systemPrompt(forcedArchetype?: Archetype): string {
   const guide = ARCHETYPE_KEYS.map((k) => `- ${k}: ${ARCHETYPES[k]}`).join("\n");
   const base = [
     "You are the spirit medium behind Séance. You look at an everyday object and channel the larger-than-life character secretly living inside it.",
@@ -335,9 +276,11 @@ function systemPrompt(multi = false): string {
     guide,
     "The character will speak aloud to a stranger, so give it a strong, playable, instantly-recognizable voice. The openingLine is the funny first thing it blurts out the moment it wakes up and notices a human — make it land.",
   ];
-  if (multi) {
+  if (forcedArchetype) {
+    // The picker assigned this exact archetype — write the WHOLE persona (voice,
+    // traits, openingLine, systemPrompt) to it, don't just label it that.
     base.push(
-      "Generate EXACTLY 3 distinct personas for this object — each must use a DIFFERENT archetype and take a genuinely different angle on the object's inner life. Rank them best-fit first (the one you think is funniest and most true to the object's nature). Call emit_personas with all three.",
+      `This character MUST be the "${forcedArchetype}" archetype: ${ARCHETYPES[forcedArchetype]} Commit to that voice completely — every field should read as this archetype. Then call emit_persona with the result.`,
     );
   } else {
     base.push("Pick the single best-fit archetype and COMMIT to its voice completely. Then call emit_persona with the result.");
@@ -445,6 +388,56 @@ function withMemoryKey(persona: Persona): Persona {
 }
 
 /**
+ * One full persona generation from the photo, optionally forced to a specific
+ * archetype. Throws on API/network failure (callers decide how to degrade);
+ * returns a playable fallbackPersona only when a *successful* response fails
+ * validation. The returned persona is NOT yet memory-keyed — callers apply
+ * withMemoryKey so they control object-identity pinning.
+ */
+async function generatePersona(image: ImageInput, forcedArchetype?: Archetype): Promise<Persona> {
+  const message = await client!.messages.create({
+    model: config.anthropicVisionModel,
+    max_tokens: 2048,
+    system: systemPrompt(forcedArchetype),
+    tools: [EMIT_PERSONA_TOOL],
+    // Force the model to call emit_persona — it cannot reply with free text.
+    tool_choice: { type: "tool", name: EMIT_PERSONA_TOOL.name },
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: imageSource(image) },
+          {
+            type: "text",
+            text: forcedArchetype
+              ? `Channel the "${forcedArchetype}" character inside this object and call emit_persona.`
+              : "Channel the character inside this object and call emit_persona.",
+          },
+        ],
+      },
+    ],
+  }, {
+    // Persona generation emits a large structured object (systemPrompt +
+    // portraitPrompt + backstory) and routinely runs past the client's default
+    // 30s timeout. Give each call its own generous window.
+    timeout: 90_000,
+  });
+
+  const toolUse = message.content.find((b) => b.type === "tool_use");
+  const persona =
+    toolUse && toolUse.type === "tool_use" ? validatePersona(toolUse.input) : null;
+  if (!persona) {
+    console.warn("generatePersona: response failed validation — using fallback persona", {
+      stopReason: message.stop_reason,
+    });
+    return fallbackPersona(forcedArchetype);
+  }
+  // The assigned archetype is authoritative, even if the model labeled it otherwise.
+  if (forcedArchetype) persona.archetype = forcedArchetype;
+  return persona;
+}
+
+/**
  * Look at a captured photo and invent the persona living inside the object.
  * @param image base64 + mediaType (e.g. from the camera data URL) OR a public url.
  * @param opts  forceArchetype to honor the user's personality pick.
@@ -454,42 +447,7 @@ export async function awaken(image: ImageInput, opts: AwakenOptions = {}): Promi
   if (!client) return withMemoryKey(mockPersona(forceArchetype));
 
   try {
-    const message = await client.messages.create({
-      model: config.anthropicVisionModel,
-      max_tokens: 2048,
-      system: systemPrompt(false),
-      tools: [EMIT_PERSONA_TOOL],
-      // Force the model to call emit_persona — it cannot reply with free text.
-      tool_choice: { type: "tool", name: EMIT_PERSONA_TOOL.name },
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: imageSource(image) },
-            {
-              type: "text",
-              text: "Channel the character inside this object and call emit_persona.",
-            },
-          ],
-        },
-      ],
-    });
-
-    const toolUse = message.content.find((b) => b.type === "tool_use");
-    const persona =
-      toolUse && toolUse.type === "tool_use"
-        ? validatePersona(toolUse.input)
-        : null;
-
-    if (!persona) {
-      console.warn("awaken: Claude response failed validation — using fallback persona", {
-        stopReason: message.stop_reason,
-      });
-      return withMemoryKey(fallbackPersona(forceArchetype));
-    }
-    // The user's explicit pick is authoritative, even if the model drifted.
-    if (forceArchetype) persona.archetype = forceArchetype;
-    return withMemoryKey(persona);
+    return withMemoryKey(await generatePersona(image, forceArchetype));
   } catch (err) {
     // Network/API failure must never break /api/awaken — degrade to a canned persona.
     console.error("awaken: Anthropic call failed — using fallback persona:", err);
@@ -498,47 +456,100 @@ export async function awaken(image: ImageInput, opts: AwakenOptions = {}): Promi
 }
 
 /**
- * Generate 3 ranked personas for the same object. Ranked best-fit first.
- * Falls back to three variations on fallbackPersona if Claude fails.
+ * Fast triage call: identify the object and pick 3 distinct, ranked archetypes.
+ * Runs on the quick model with a tiny output, so it adds only a few seconds
+ * before the (parallel) heavy generations in awakenAll.
+ */
+async function pickArchetypes(
+  image: ImageInput,
+): Promise<{ object: string; objectKey: string; archetypes: Archetype[] }> {
+  const guide = ARCHETYPE_KEYS.map((k) => `- ${k}: ${ARCHETYPES[k]}`).join("\n");
+  const message = await client!.messages.create({
+    model: config.anthropicReplyModel, // the fast model — this is just a routing decision
+    max_tokens: 512,
+    system: [
+      "You are the spirit medium behind Séance. Identify the photographed object, then choose the three funniest, best-fitting comedic archetypes for the characters that could live inside it.",
+      "Set objectRecognized true ONLY when you can confidently name a specific physical object.",
+      "Archetypes:",
+      guide,
+    ].join("\n\n"),
+    tools: [PICK_ARCHETYPES_TOOL],
+    tool_choice: { type: "tool", name: PICK_ARCHETYPES_TOOL.name },
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: imageSource(image) },
+          {
+            type: "text",
+            text: "Identify this object and call pick_archetypes with three distinct, ranked archetypes.",
+          },
+        ],
+      },
+    ],
+  }, { timeout: 30_000 });
+
+  const toolUse = message.content.find((b) => b.type === "tool_use");
+  const input =
+    toolUse && toolUse.type === "tool_use" ? (toolUse.input as Record<string, unknown>) : {};
+
+  // Keep only valid, distinct archetypes, then top up to 3 if the model returned
+  // duplicates or fewer than three.
+  const picked = Array.isArray(input.archetypes) ? input.archetypes.filter(isArchetype) : [];
+  const archetypes: Archetype[] = [];
+  for (const a of picked) if (!archetypes.includes(a)) archetypes.push(a);
+  for (const a of ARCHETYPE_KEYS) {
+    if (archetypes.length >= 3) break;
+    if (!archetypes.includes(a)) archetypes.push(a);
+  }
+
+  return {
+    object: filled(input.object) ? (input.object as string).trim() : "a mysterious object",
+    objectKey: filled(input.objectKey) ? (input.objectKey as string).trim() : "mysterious-object",
+    archetypes: archetypes.slice(0, 3),
+  };
+}
+
+/**
+ * Generate 3 ranked personas for the same object, fanned out in PARALLEL.
+ * A fast triage call picks 3 distinct archetypes, then the three full personas
+ * are generated concurrently — so the wall-clock cost is roughly one generation
+ * plus the short triage, instead of three generations back-to-back.
+ * Falls back to a single playable persona if everything fails.
  */
 export async function awakenAll(image: ImageInput): Promise<Persona[]> {
   if (!client) return [mockPersona(), mockPersona(), mockPersona()];
 
+  let triage: { object: string; objectKey: string; archetypes: Archetype[] };
   try {
-    const message = await client.messages.create({
-      model: config.anthropicVisionModel,
-      max_tokens: 6144,
-      system: systemPrompt(true),
-      tools: [EMIT_PERSONAS_TOOL],
-      tool_choice: { type: "tool", name: EMIT_PERSONAS_TOOL.name },
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: imageSource(image) },
-            {
-              type: "text",
-              text: "Channel 3 distinct spirits inside this object, ranked best-fit first. Call emit_personas.",
-            },
-          ],
-        },
-      ],
-    });
-
-    const toolUse = message.content.find((b) => b.type === "tool_use");
-    if (!toolUse || toolUse.type !== "tool_use") {
-      console.warn("awakenAll: no tool_use in response, falling back");
-      return [fallbackPersona()];
-    }
-    const raw = (toolUse.input as { personas?: unknown }).personas;
-    if (!Array.isArray(raw)) return [fallbackPersona()];
-    const personas = raw.map(validatePersona).filter((p): p is Persona => p !== null);
-    if (personas.length === 0) return [fallbackPersona()];
-    return personas;
+    triage = await pickArchetypes(image);
   } catch (err) {
-    console.error("awakenAll: Anthropic call failed — using fallback persona:", err);
-    return [fallbackPersona()];
+    // Triage failed — degrade to a single best-fit generation rather than nothing.
+    console.warn("awakenAll: archetype triage failed, generating a single persona:", err);
+    try {
+      return [withMemoryKey(await generatePersona(image))];
+    } catch (err2) {
+      console.error("awakenAll: single fallback also failed:", err2);
+      return [withMemoryKey(fallbackPersona())];
+    }
   }
+
+  // Fan out: one full persona per chosen archetype, all at once.
+  const settled = await Promise.allSettled(
+    triage.archetypes.map((a) => generatePersona(image, a)),
+  );
+  const personas: Persona[] = [];
+  for (const r of settled) {
+    if (r.status !== "fulfilled") continue;
+    const p = r.value;
+    // Pin every persona to the SAME object identity from triage so their memory
+    // keys share a base (withMemoryKey then namespaces each one per-archetype).
+    p.objectKey = triage.objectKey;
+    if (!filled(p.object)) p.object = triage.object;
+    personas.push(withMemoryKey(p));
+  }
+  if (personas.length === 0) return [withMemoryKey(fallbackPersona())];
+  return personas;
 }
 
 /**
@@ -563,7 +574,7 @@ export async function reply(
   // TTS and display — writing them just makes the surrounding dialogue more
   // expressive and in-character.
   const deliveryNote =
-    "\n\nDelivery: you are speaking aloud — natural rhythm, contractions, never narrate your own name. You may add at most ONE short *stage direction* in asterisks (e.g. *sighs*, *leans in*), a few words max; everything else is spoken dialogue.";
+    "\n\nDelivery: you are speaking aloud — natural rhythm, contractions, never narrate your own name. Keep EVERY reply to 1-2 sentences maximum; never more, even when asked to explain or list — stay terse and let the human talk. You may add at most ONE short *stage direction* in asterisks (e.g. *sighs*, *leans in*), a few words max; everything else is spoken dialogue.";
 
   // Cap replayed history so a long demo session can't grow tokens/latency
   // unboundedly turn-over-turn — the last ~20 turns is plenty of context.
@@ -571,8 +582,9 @@ export async function reply(
   try {
     message = await client.messages.create({
       model: config.anthropicReplyModel,
-      max_tokens: 300,
-      // Short max_tokens keeps the spoken reply snappy in a live voice loop.
+      max_tokens: 160,
+      // Short max_tokens keeps the spoken reply snappy in a live voice loop and
+      // backstops the 1-2 sentence limit (1-2 spoken sentences ≪ 160 tokens).
       system: persona.systemPrompt + memoryNote + deliveryNote,
       messages: [
         ...history.slice(-20).map((t) => ({ role: t.role, content: t.text })),
@@ -615,7 +627,7 @@ function fallbackPersona(forceArchetype?: Archetype): Persona {
     voiceModel: config.deepgramTtsModel,
     voice: { model: config.deepgramTtsModel, rate: 0.92, pitch: 0.9, volume: 0.9, style: "flat, unbothered, deadpan" },
     systemPrompt:
-      "You are The Object, a deadpan, unflappable spirit of total understatement. Treat every situation — however absurd — with flat, unhurried calm. Keep replies to 1-3 sentences since they are spoken aloud. Never break character.",
+      "You are The Object, a deadpan, unflappable spirit of total understatement. Treat every situation — however absurd — with flat, unhurried calm. Keep replies to 1-2 sentences maximum since they are spoken aloud. Never break character.",
     portraitPrompt:
       "a nondescript everyday object with a single calm, half-lidded eye, flat neutral expression, soft dramatic lighting, deadpan mood",
   };

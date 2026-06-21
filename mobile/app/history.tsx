@@ -25,7 +25,7 @@ import { sessionStore } from '../src/sessionStore';
 import { C, FONTS, R, SP } from '../src/theme';
 
 // A small palette so each card's accent bar differs, like the home ledger.
-const TONES = ['#0F6B5C', '#B8923C', '#D93D1A', '#34B7A0', '#9E2A10'];
+const TONES = [C.tealDeep, C.amber, C.red, C.teal, C.redDark];
 
 // Portraits come back as data: URLs (mock/gemini) or http(s) URLs (pollinations);
 // only a bare server path needs the API origin prepended.
@@ -131,7 +131,7 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <LinearGradient
-        colors={['#F4ECDA', '#E6DBC4']}
+        colors={[C.creamLight, C.creamMid]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F6EFE0',
+    backgroundColor: C.creamBright,
     borderRadius: R.md,
     borderWidth: 1,
     borderColor: '#D8C9AC',
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   thumbEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E6DBC4',
+    backgroundColor: C.creamMid,
   },
   thumbGlyph: { fontSize: 22, color: C.amber, opacity: 0.5 },
 

@@ -1,4 +1,4 @@
-import type { AwakenResponse } from "./api";
+import type { AwakenResponse, EncounterResponse } from "./api";
 
 /**
  * A tiny module-level handoff for the current séance.
@@ -15,6 +15,7 @@ import type { AwakenResponse } from "./api";
 let capturedImage: string | null = null;
 let awakenResult: AwakenResponse | null = null;
 let challengerResult: AwakenResponse | null = null;
+let encounterResult: EncounterResponse | null = null;
 
 export const sessionStore = {
   setImage(dataUrl: string) {
@@ -38,9 +39,16 @@ export const sessionStore = {
   clearChallenger() {
     challengerResult = null;
   },
+  setEncounter(result: EncounterResponse) {
+    encounterResult = result;
+  },
+  getEncounter(): EncounterResponse | null {
+    return encounterResult;
+  },
   clear() {
     capturedImage = null;
     awakenResult = null;
     challengerResult = null;
+    encounterResult = null;
   },
 };

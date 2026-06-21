@@ -27,6 +27,7 @@ import { encounter, type AwakenResponse } from "../src/api";
 import type { Persona } from "../src/types";
 import { sessionStore } from "../src/sessionStore";
 import { AliveAvatar } from "../src/components/AliveAvatar";
+import { C, FONTS } from "../src/theme";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -287,12 +288,13 @@ export default function RevealScreen() {
       }
     } catch {
       // TTS failure is silent — the text is still visible on the card
+    } finally {
+      if (mounted.current) {
+        setSpeakingIdx(null);
+        setPickerVisible(true);
+        Animated.timing(pickerOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+      }
     }
-    if (!mounted.current) return;
-    setSpeakingIdx(null);
-    // Reveal picker after the first opening line finishes
-    setPickerVisible(true);
-    Animated.timing(pickerOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, [pickerOpacity]);
 
   // Play opening line on mount (skip if in introduce mode — we navigate away immediately)
@@ -311,7 +313,8 @@ export default function RevealScreen() {
       try {
         const data = await encounter(challengerResult.persona.objectKey, result.persona.objectKey);
         if (cancelled) return;
-        router.replace({ pathname: "/encounter", params: { encounterJson: JSON.stringify(data) } });
+        sessionStore.setEncounter(data);
+        router.replace("/encounter");
       } catch {
         // If encounter fails, show the card normally so user can still séance
         if (!cancelled) setMeetingLoading(false);
@@ -401,7 +404,7 @@ export default function RevealScreen() {
           {speakingIdx !== null ? "✦ the spirit speaks ✦" : "✦ the spirit has taken form ✦"}
         </Text>
 
-        {/* Spirit card �� swaps persona on pick */}
+        {/* Spirit card — swaps persona on pick */}
         <SpiritCard result={displayResult} speaking={speakingIdx === activePersonaIdx} />
 
         {/* Persona picker — fades in after opening line finishes */}
@@ -450,7 +453,7 @@ export default function RevealScreen() {
       {/* Overlay while the encounter API call is in flight */}
       {meetingLoading && (
         <View style={ss.meetingOverlay}>
-          <ActivityIndicator color="#34B7A0" size="large" />
+          <ActivityIndicator color={C.teal} size="large" />
           <Text style={ss.meetingOverlayText}>arranging the meeting…</Text>
         </View>
       )}
@@ -467,9 +470,9 @@ const pk = StyleSheet.create({
     alignItems: "center",
   },
   label: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 9,
-    color: "#8a7c68",
+    color: C.textDimmest,
     letterSpacing: 2,
     marginBottom: 10,
     textTransform: "uppercase",
@@ -491,7 +494,7 @@ const pk = StyleSheet.create({
     position: "relative",
   },
   chipActive: {
-    borderColor: "#D6A94B",
+    borderColor: C.amberBright,
     backgroundColor: "rgba(214,169,75,0.1)",
   },
   speakingDot: {
@@ -501,21 +504,21 @@ const pk = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#D6A94B",
+    backgroundColor: C.amberBright,
   },
   chipName: {
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
     fontSize: 14,
     color: "#B8A98C",
     textAlign: "center",
   },
   chipNameActive: {
-    color: "#F2E9D6",
+    color: C.creamDark,
   },
   chipArchetype: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 8,
-    color: "#5A4F42",
+    color: C.inkFaint,
     letterSpacing: 1,
     textAlign: "center",
   },
@@ -526,7 +529,7 @@ const pk = StyleSheet.create({
 const cs = StyleSheet.create({
   card: {
     width: 298,
-    backgroundColor: "#F2E9D6",
+    backgroundColor: C.creamDark,
     borderRadius: 15,
     overflow: "hidden",
     alignSelf: "center",
@@ -546,15 +549,15 @@ const cs = StyleSheet.create({
     paddingBottom: 8,
   },
   archetype: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 9,
-    color: "#7A1F0C",
+    color: C.redDeeper,
     letterSpacing: 1.5,
   },
   catalogNum: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 9,
-    color: "#9b8e76",
+    color: C.textDimmer,
   },
   photoWrap: {
     marginHorizontal: 14,
@@ -574,21 +577,21 @@ const cs = StyleSheet.create({
     left: 8,
   },
   photoLabelText: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 8,
-    color: "#F2E9D6",
+    color: C.creamDark,
     letterSpacing: 0.5,
   },
   name: {
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
     fontSize: 36,
-    color: "#1C1813",
+    color: C.textDark,
     marginTop: 12,
     marginHorizontal: 14,
     lineHeight: 40,
   },
   tagline: {
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
     fontSize: 15,
     fontStyle: "italic",
     color: "#7c7060",
@@ -612,9 +615,9 @@ const cs = StyleSheet.create({
     paddingHorizontal: 8,
   },
   chipText: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 8.5,
-    color: "#7A1F0C",
+    color: C.redDeeper,
     letterSpacing: 1,
   },
   statsRow: {
@@ -634,20 +637,20 @@ const cs = StyleSheet.create({
     gap: 3,
   },
   statLabel: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 8,
-    color: "#9b8e76",
+    color: C.textDimmer,
     letterSpacing: 1,
   },
   statValue: {
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
     fontSize: 20,
-    color: "#1C1813",
+    color: C.textDark,
   },
   statValueMono: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 11,
-    color: "#1C1813",
+    color: C.textDark,
     lineHeight: 17,
     marginTop: 3,
   },
@@ -658,7 +661,7 @@ const cs = StyleSheet.create({
     marginHorizontal: 8,
   },
   backstory: {
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
     fontSize: 15,
     fontStyle: "italic",
     color: "#3B342A",
@@ -680,16 +683,16 @@ const cs = StyleSheet.create({
     top: 16,
     right: -22,
     width: 90,
-    backgroundColor: "#D93D1A",
+    backgroundColor: C.red,
     paddingVertical: 4,
     paddingHorizontal: 38,
     transform: [{ rotate: "45deg" }],
     alignItems: "center",
   },
   ribbonText: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 7.5,
-    color: "#F6EFE0",
+    color: C.creamBright,
     letterSpacing: 1.5,
   },
 });
@@ -713,47 +716,47 @@ const ss = StyleSheet.create({
     padding: 32,
   },
   errorText: {
-    color: "#D93D1A",
+    color: C.red,
     fontSize: 15,
     textAlign: "center",
   },
   topLabel: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 9,
     letterSpacing: 3,
-    color: "#D6A94B",
+    color: C.amberBright,
     textAlign: "center",
     marginBottom: 20,
   },
   seanceBtn: {
     width: 298,
-    backgroundColor: "#D93D1A",
+    backgroundColor: C.red,
     borderWidth: 1,
-    borderColor: "#7A1F0C",
+    borderColor: C.redDeeper,
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: "center",
     marginBottom: 16,
   },
   seanceBtnText: {
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
     fontSize: 22,
-    color: "#F0E7D6",
+    color: C.textLight,
   },
   introduceBtn: {
     width: 298,
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#34B7A0",
+    borderColor: C.teal,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
     marginBottom: 12,
   },
   introduceBtnText: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 12,
-    color: "#34B7A0",
+    color: C.teal,
     letterSpacing: 1.5,
   },
   recoverBtn: {
@@ -764,9 +767,9 @@ const ss = StyleSheet.create({
     paddingVertical: 8,
   },
   anotherText: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 9.5,
-    color: "#8a7c68",
+    color: C.textDimmest,
     textDecorationLine: "underline",
     letterSpacing: 1,
   },
@@ -778,9 +781,9 @@ const ss = StyleSheet.create({
     gap: 16,
   },
   meetingOverlayText: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 11,
-    color: "#34B7A0",
+    color: C.teal,
     letterSpacing: 2,
     fontStyle: "italic",
   },

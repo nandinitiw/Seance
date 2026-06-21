@@ -24,6 +24,28 @@ async function ensureConnected() {
 }
 
 const KEY = (objectKey: string) => `seance:object:${objectKey}`;
+// Canonical pair key — always sort so (a,b) and (b,a) hit the same slot.
+const PAIR_KEY = (k1: string, k2: string) =>
+  `seance:pair:${[k1, k2].sort().join(":")}`;
+
+const pairMem = new Map<string, string>();
+
+export async function loadPairDynamic(key1: string, key2: string): Promise<string | null> {
+  if (redis) {
+    await ensureConnected();
+    return redis.get(PAIR_KEY(key1, key2));
+  }
+  return pairMem.get(PAIR_KEY(key1, key2)) ?? null;
+}
+
+export async function savePairDynamic(key1: string, key2: string, dynamic: string): Promise<void> {
+  if (redis) {
+    await ensureConnected();
+    await redis.set(PAIR_KEY(key1, key2), dynamic, { EX: 60 * 60 * 24 * 7 });
+  } else {
+    pairMem.set(PAIR_KEY(key1, key2), dynamic);
+  }
+}
 
 export async function loadState(objectKey: string): Promise<SessionState | null> {
   if (redis) {

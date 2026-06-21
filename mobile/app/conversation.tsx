@@ -30,6 +30,7 @@ import {
   type VoiceStatus,
 } from "../src/hooks/useConverse";
 import type { Turn } from "../src/types";
+import { C, FONTS } from "../src/theme";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -53,15 +54,15 @@ function statusLabel(status: VoiceStatus): string {
 }
 
 function micColor(status: VoiceStatus): string {
-  if (status === "user-speaking") return "#34B7A0";
-  if (status === "agent-speaking") return "#FF5A38";
-  return "#2B241E";
+  if (status === "user-speaking") return C.teal;
+  if (status === "agent-speaking") return C.ember;
+  return C.surface;
 }
 
 function waveColor(status: VoiceStatus): string {
-  if (status === "user-speaking") return "#34B7A0";
-  if (status === "agent-speaking") return "#FF5A38";
-  return "#5A4F42";
+  if (status === "user-speaking") return C.teal;
+  if (status === "agent-speaking") return C.ember;
+  return C.inkFaint;
 }
 
 // ── Waveform component ────────────────────────────────────────────────────────
@@ -205,7 +206,7 @@ const td = StyleSheet.create({
   dotsRow: {
     flexDirection: "row",
     gap: 5,
-    backgroundColor: "#F2E9D6",
+    backgroundColor: C.creamDark,
     borderRadius: 14,
     borderTopLeftRadius: 4,
     paddingVertical: 12,
@@ -216,12 +217,12 @@ const td = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#D93D1A",
+    backgroundColor: C.red,
   },
   label: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 10,
-    color: "#9b8e76",
+    color: C.textDimmer,
     marginLeft: 4,
   },
 });
@@ -282,9 +283,9 @@ const cb = StyleSheet.create({
     alignSelf: "flex-start",
   },
   agentLabel: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 9,
-    color: "#D6A94B",
+    color: C.amberBright,
     marginBottom: 4,
     marginLeft: 4,
     letterSpacing: 1.5,
@@ -295,13 +296,13 @@ const cb = StyleSheet.create({
     paddingHorizontal: 15,
   },
   bubbleAgent: {
-    backgroundColor: "#F2E9D6",
+    backgroundColor: C.creamDark,
     borderTopLeftRadius: 4,
   },
   bubbleUser: {
-    backgroundColor: "#2B241E",
+    backgroundColor: C.surface,
     borderWidth: 0.75,
-    borderColor: "#3A3128",
+    borderColor: C.hairline,
     borderTopRightRadius: 4,
   },
   text: {
@@ -309,12 +310,12 @@ const cb = StyleSheet.create({
     lineHeight: 22,
   },
   textAgent: {
-    color: "#1C1813",
-    fontFamily: "InstrumentSerif_400Regular",
+    color: C.textDark,
+    fontFamily: FONTS.serif,
   },
   textUser: {
-    color: "#F0E7D6",
-    fontFamily: "InstrumentSerif_400Regular",
+    color: C.textLight,
+    fontFamily: FONTS.serif,
   },
 });
 
@@ -378,9 +379,9 @@ const av = StyleSheet.create({
     position: "absolute",
     width: 60,
     height: 60,
-    backgroundColor: "#FF5A38",
+    backgroundColor: C.ember,
     // Shadow glow approximation
-    shadowColor: "#FF5A38",
+    shadowColor: C.ember,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 12,
@@ -403,7 +404,7 @@ function MicIcon({ status }: { status: VoiceStatus }) {
     );
   }
 
-  const color = isListening ? '#160F0C' : '#D6A94B';
+  const color = isListening ? '#160F0C' : C.amberBright;
   return (
     <View style={{ alignItems: 'center' }}>
       {/* Capsule top */}
@@ -571,7 +572,7 @@ function ConversationView({ result }: { result: AwakenResponse }) {
             value={draft}
             onChangeText={setDraft}
             placeholder="type a message…"
-            placeholderTextColor="#5A4F42"
+            placeholderTextColor={C.inkFaint}
             returnKeyType="send"
             onSubmitEditing={handleSend}
             editable={!busy}
@@ -656,31 +657,31 @@ const cv = StyleSheet.create({
     padding: 32,
   },
   errorText: {
-    color: "#D93D1A",
+    color: C.red,
     fontSize: 14,
     textAlign: "center",
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
   },
   recoverBtn: {
     marginTop: 22,
-    backgroundColor: "#D93D1A",
+    backgroundColor: C.red,
     borderWidth: 1,
-    borderColor: "#7A1F0C",
+    borderColor: C.redDeeper,
     borderRadius: 10,
     paddingVertical: 14,
     paddingHorizontal: 30,
   },
   recoverBtnText: {
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
     fontSize: 19,
-    color: "#F0E7D6",
+    color: C.textLight,
   },
   errorBanner: {
     backgroundColor: "rgba(217,61,26,0.12)",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#7A1F0C",
+    borderBottomColor: C.redDeeper,
   },
 
   // Header
@@ -691,7 +692,7 @@ const cv = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#2B241E",
+    borderBottomColor: C.surface,
   },
   avatarWrap: {
     width: 60,
@@ -706,8 +707,8 @@ const cv = StyleSheet.create({
     height: 46,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: "#D6A94B",
-    backgroundColor: "#2B241E",
+    borderColor: C.amberBright,
+    backgroundColor: C.surface,
   },
   identity: {
     flex: 1,
@@ -715,28 +716,28 @@ const cv = StyleSheet.create({
     gap: 3,
   },
   name: {
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
     fontSize: 24,
-    color: "#F0E7D6",
+    color: C.textLight,
     lineHeight: 28,
   },
   statusLabel: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 9,
     letterSpacing: 1.5,
-    color: "#D6A94B",
+    color: C.amberBright,
   },
   leaveBtn: {
     borderWidth: 1,
-    borderColor: "#3A3128",
+    borderColor: C.hairline,
     borderRadius: 7,
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
   leaveBtnText: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 10,
-    color: "#A89A86",
+    color: C.textDim,
     letterSpacing: 1,
   },
 
@@ -757,7 +758,7 @@ const cv = StyleSheet.create({
     paddingTop: 11,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: "#2B241E",
+    borderTopColor: C.surface,
     backgroundColor: "#140f0c",
     gap: 8,
   },
@@ -771,15 +772,15 @@ const cv = StyleSheet.create({
     height: 48,
     backgroundColor: "#1C1611",
     borderWidth: 1,
-    borderColor: "#3A3128",
+    borderColor: C.hairline,
     borderRadius: 12,
     paddingHorizontal: 14,
-    color: "#F0E7D6",
+    color: C.textLight,
     fontSize: 14,
-    fontFamily: "InstrumentSerif_400Regular",
+    fontFamily: FONTS.serif,
   },
   sendBtn: {
-    backgroundColor: "#D93D1A",
+    backgroundColor: C.red,
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 14,
@@ -787,9 +788,9 @@ const cv = StyleSheet.create({
     justifyContent: "center",
   },
   sendBtnText: {
-    fontFamily: "DMMono_500Medium",
+    fontFamily: FONTS.monoMedium,
     fontSize: 11,
-    color: "#F0E7D6",
+    color: C.textLight,
     letterSpacing: 1,
   },
   micBtn: {
@@ -799,7 +800,7 @@ const cv = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#D6A94B",
+    borderColor: C.amberBright,
   },
   waveRow: {
     height: 34,
@@ -809,15 +810,15 @@ const cv = StyleSheet.create({
   },
   introduceBtn: {
     borderWidth: 0.75,
-    borderColor: "#34B7A0",
+    borderColor: C.teal,
     borderRadius: 6,
     paddingVertical: 5,
     paddingHorizontal: 10,
   },
   introduceBtnText: {
-    fontFamily: "DMMono_400Regular",
+    fontFamily: FONTS.mono,
     fontSize: 9,
-    color: "#34B7A0",
+    color: C.teal,
     letterSpacing: 1.5,
   },
 });

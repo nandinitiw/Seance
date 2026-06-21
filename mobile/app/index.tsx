@@ -24,7 +24,7 @@ import { C, FONTS, R, SP } from '../src/theme';
 
 // ── Ledger accent palette (one per card) ───────────────────────────────────────
 
-const LEDGER_TONES = ['#0F6B5C', '#B8923C', '#D93D1A'];
+const LEDGER_TONES = [C.tealDeep, C.amber, C.red];
 
 
 // ── Corner bracket decoration ─────────────────────────────────────────────────
@@ -153,7 +153,7 @@ export default function CaptureScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <LinearGradient
-        colors={['#F4ECDA', '#E6DBC4']}
+        colors={[C.creamLight, C.creamMid]}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderWidth: 0.75,
-    borderColor: '#34B7A0',
+    borderColor: C.teal,
     borderRadius: 4,
     backgroundColor: 'rgba(52,183,160,0.07)',
   },
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 9,
     letterSpacing: 2,
-    color: '#34B7A0',
+    color: C.teal,
     textAlign: 'center',
   },
 
@@ -620,7 +620,7 @@ const styles = StyleSheet.create({
   },
   ledgerCard: {
     borderLeftWidth: 3,
-    backgroundColor: '#F6EFE0',
+    backgroundColor: C.creamBright,
     borderRadius: 5,
     overflow: 'hidden',
     borderWidth: 1,
@@ -644,15 +644,5 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: C.textMuted,
     letterSpacing: 0.8,
-  },
-  ledgerBadge: {
-    borderRadius: R.full,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  ledgerBadgeText: {
-    fontFamily: FONTS.monoMedium,
-    fontSize: 10,
-    letterSpacing: 1,
   },
 });

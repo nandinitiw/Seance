@@ -4,7 +4,7 @@ import { config, caps, logCapabilities } from "./config.js";
 import { awaken, awakenAll, reply, generateEncounter, archetypeCatalog, type ImageInput } from "./lib/claude.js";
 import { paintPortrait, generateMysteryPortrait } from "./lib/imagegen.js";
 import { transcribe, speak } from "./lib/deepgram.js";
-import { loadState, saveState } from "./lib/memory.js";
+import { loadState, saveState, loadPairDynamic, savePairDynamic } from "./lib/memory.js";
 import { recordSession, listSessions, getSession } from "./lib/history.js";
 import type { SessionState } from "./types.js";
 
@@ -327,11 +327,19 @@ app.post("/api/encounter", async (req, res) => {
     if (!objectKey1 || !objectKey2) {
       return res.status(400).json({ error: "objectKey1 and objectKey2 are required." });
     }
-    const [state1, state2] = await Promise.all([loadState(objectKey1), loadState(objectKey2)]);
+    const [state1, state2, savedDynamic] = await Promise.all([
+      loadState(objectKey1),
+      loadState(objectKey2),
+      loadPairDynamic(objectKey1, objectKey2),
+    ]);
     if (!state1) return res.status(404).json({ error: `Unknown object: ${objectKey1}` });
     if (!state2) return res.status(404).json({ error: `Unknown object: ${objectKey2}` });
 
-    const { lines, relationship } = await generateEncounter(state1.persona, state2.persona, dynamic);
+    // Use the explicitly-passed dynamic, or fall back to whatever the pair used last.
+    const effectiveDynamic = dynamic ?? savedDynamic ?? undefined;
+    if (dynamic) await savePairDynamic(objectKey1, objectKey2, dynamic);
+
+    const { lines, relationship } = await generateEncounter(state1.persona, state2.persona, effectiveDynamic);
     res.json({
       lines,
       relationship,

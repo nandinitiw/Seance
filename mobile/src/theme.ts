@@ -23,9 +23,17 @@ export const C = {
   red: '#D93D1A',
   redDark: '#9E2A10',
   redDeeper: '#7A1F0C',
+  ember: '#FF5A38', // bright glow — agent speaking, auras, channeling accents
 
   // --- Teal ---
   teal: '#34B7A0',
+  tealDeep: '#0F6B5C',
+
+  // --- Dark surfaces (channeling / conversation screens) ---
+  surface: '#2B241E', // raised UI on dark: tracks, user bubbles, avatar wells
+  surfaceDeep: '#1A120D', // deepest wells: portrait/photo placeholders
+  hairline: '#3A3128', // borders/dividers on dark
+  inkFaint: '#5A4F42', // faintest mono text / idle states on dark
 
   // --- Text ---
   textLight: '#F0E7D6',

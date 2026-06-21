@@ -4,7 +4,7 @@
  * After the scene: a relationship verdict + replay chips to try other dynamics.
  */
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Defs, Pattern, Circle, Rect } from "react-native-svg";
 import { Audio } from "expo-av";
 import { encounter, tts, type EncounterLine, type EncounterResponse } from "../src/api";
+import { sessionStore } from "../src/sessionStore";
 import { C, FONTS, SP } from "../src/theme";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ function PortraitCard({
     }).start();
   }, [active, glow]);
 
-  const activeColor = align === "left" ? "#D93D1A" : "#34B7A0";
+  const activeColor = align === "left" ? C.red : C.teal;
 
   const borderColor = glow.interpolate({
     inputRange: [0, 1],
@@ -105,10 +106,7 @@ function PortraitCard({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function EncounterScreen() {
-  const { encounterJson } = useLocalSearchParams<{ encounterJson: string }>();
-
-  let initial: EncounterResponse | null = null;
-  try { initial = JSON.parse(encounterJson ?? "null"); } catch { /* handled */ }
+  const initial = sessionStore.getEncounter();
 
   const [lines, setLines] = useState<EncounterLine[]>(initial?.lines ?? []);
   const [relationship, setRelationship] = useState(initial?.relationship ?? "");
@@ -202,16 +200,24 @@ export default function EncounterScreen() {
     try {
       const data = await encounter(persona1.objectKey, persona2.objectKey, dynamic);
       if (!mounted.current) return;
+      sessionStore.setEncounter(data);
       setLines(data.lines);
       setRelationship(data.relationship);
       replayLoadingRef.current = false;
       setReplayLoading(false);
+      setDone(false);
       startScene(data.lines);
     } catch {
       replayLoadingRef.current = false;
       setReplayLoading(false);
     }
   }, [persona1, persona2, startScene]);
+
+  const replayCurrentScene = useCallback(() => {
+    if (lines.length === 0) return;
+    setDone(false);
+    startScene(lines);
+  }, [lines, startScene]);
 
   if (!initial || !persona1 || !persona2) {
     return (
@@ -307,12 +313,18 @@ export default function EncounterScreen() {
             {/* Replay section */}
             {replayLoading ? (
               <View style={styles.replayLoader}>
-                <ActivityIndicator color="#34B7A0" size="small" />
+                <ActivityIndicator color={C.teal} size="small" />
                 <Text style={styles.replayLoaderText}>rewriting fate…</Text>
               </View>
             ) : (
               <>
-                <Text style={styles.replayLabel}>PLAY IT AGAIN AS…</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.replayBtn, pressed && { opacity: 0.7 }]}
+                  onPress={replayCurrentScene}
+                >
+                  <Text style={styles.replayBtnText}>↺ replay this exchange</Text>
+                </Pressable>
+                <Text style={styles.replayLabel}>REWRITE AS…</Text>
                 <View style={styles.chips}>
                   {REPLAY_DYNAMICS.map(({ label, value }) => (
                     <Pressable
@@ -327,7 +339,13 @@ export default function EncounterScreen() {
               </>
             )}
 
-            {/* Back */}
+            {/* Exit CTAs */}
+            <Pressable
+              style={({ pressed }) => [styles.seanceBtn, pressed && { opacity: 0.85 }]}
+              onPress={() => router.replace("/")}
+            >
+              <Text style={styles.seanceBtnText}>summon another object →</Text>
+            </Pressable>
             <Pressable onPress={() => router.back()} style={styles.backWrap}>
               <Text style={styles.backText}>return to the spirits</Text>
             </Pressable>
@@ -355,14 +373,14 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 9,
     letterSpacing: 3,
-    color: "#D6A94B",
+    color: C.amberBright,
     textAlign: "center",
   },
   leaveBtn: {
     position: "absolute",
     right: SP.lg,
     borderWidth: 1,
-    borderColor: "#3A3128",
+    borderColor: C.hairline,
     borderRadius: 7,
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -370,7 +388,7 @@ const styles = StyleSheet.create({
   leaveBtnText: {
     fontFamily: FONTS.mono,
     fontSize: 10,
-    color: "#A89A86",
+    color: C.textDim,
     letterSpacing: 1,
   },
   scroll: {
@@ -389,7 +407,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontFamily: FONTS.mono,
     fontSize: 13,
-    color: "#D93D1A",
+    color: C.red,
     textAlign: "center",
   },
   backBtn: { paddingVertical: 8 },
@@ -421,13 +439,13 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     borderWidth: 1.5,
     overflow: "hidden",
-    backgroundColor: "#1A120D",
+    backgroundColor: C.surfaceDeep,
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 16,
     elevation: 6,
   },
   portraitImg: { width: "100%", height: "100%" },
-  portraitPlaceholder: { flex: 1, backgroundColor: "#1A120D" },
+  portraitPlaceholder: { flex: 1, backgroundColor: C.surfaceDeep },
   portraitName: {
     fontFamily: FONTS.mono,
     fontSize: 9,
@@ -457,7 +475,7 @@ const styles = StyleSheet.create({
   },
   bubble: {
     maxWidth: "75%",
-    backgroundColor: "#F2E9D6",
+    backgroundColor: C.creamDark,
     borderRadius: 8,
     padding: SP.md,
     borderWidth: 0.75,
@@ -466,16 +484,16 @@ const styles = StyleSheet.create({
   bubbleLeft: { alignSelf: "flex-start" },
   bubbleRight: { alignSelf: "flex-end" },
   bubbleActiveLeft: {
-    borderColor: "#D93D1A",
-    shadowColor: "#D93D1A",
+    borderColor: C.red,
+    shadowColor: C.red,
     shadowOpacity: 0.25,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
   },
   bubbleActiveRight: {
-    borderColor: "#34B7A0",
-    shadowColor: "#34B7A0",
+    borderColor: C.teal,
+    shadowColor: C.teal,
     shadowOpacity: 0.25,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
@@ -484,25 +502,25 @@ const styles = StyleSheet.create({
   bubbleSpeaker: {
     fontFamily: FONTS.mono,
     fontSize: 8,
-    color: "#7A1F0C",
+    color: C.redDeeper,
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   bubbleSpeakerRight: {
     textAlign: "right",
-    color: "#0F6B5C",
+    color: C.tealDeep,
   },
   bubbleText: {
     fontFamily: FONTS.serif,
     fontSize: 15,
-    color: "#1C1813",
+    color: C.textDark,
     lineHeight: 22,
   },
 
   // Verdict
   verdict: {
     alignSelf: "stretch",
-    backgroundColor: "#F2E9D6",
+    backgroundColor: C.creamDark,
     borderRadius: 10,
     borderWidth: 0.75,
     borderColor: "#C9BCA2",
@@ -515,18 +533,18 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 8,
     letterSpacing: 2.5,
-    color: "#9b8e76",
+    color: C.textDimmer,
   },
   verdictDivider: {
     width: 40,
     height: 0.75,
-    backgroundColor: "#C9A43B",
+    backgroundColor: C.amberDeep,
     marginVertical: 2,
   },
   verdictText: {
     fontFamily: FONTS.serif,
     fontSize: 32,
-    color: "#1C1813",
+    color: C.textDark,
     textAlign: "center",
   },
 
@@ -540,7 +558,7 @@ const styles = StyleSheet.create({
   replayLoaderText: {
     fontFamily: FONTS.mono,
     fontSize: 10,
-    color: "#34B7A0",
+    color: C.teal,
     letterSpacing: 1,
     fontStyle: "italic",
   },
@@ -564,7 +582,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 4,
     borderWidth: 0.75,
-    borderColor: "#B8923C",
+    borderColor: C.amber,
     backgroundColor: "rgba(201,154,59,0.08)",
   },
   chipPressed: { opacity: 0.6 },
@@ -572,14 +590,43 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 9,
     letterSpacing: 1.5,
-    color: "#7A1F0C",
+    color: C.redDeeper,
   },
 
+  replayBtn: {
+    alignSelf: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: C.teal,
+    borderRadius: 6,
+    marginBottom: SP.md,
+  },
+  replayBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: C.teal,
+    letterSpacing: 1,
+  },
+  seanceBtn: {
+    marginHorizontal: SP.lg,
+    marginTop: SP.md,
+    paddingVertical: 14,
+    backgroundColor: "#1C4A44",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  seanceBtnText: {
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    color: "#C8F0EB",
+    letterSpacing: 1,
+  },
   backWrap: { paddingVertical: 8 },
   backText: {
     fontFamily: FONTS.mono,
     fontSize: 9.5,
-    color: "#8a7c68",
+    color: C.textDimmest,
     textDecorationLine: "underline",
     letterSpacing: 1,
   },
