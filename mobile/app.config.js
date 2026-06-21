@@ -30,6 +30,7 @@ module.exports = {
         },
       ],
     ],
+    newArchEnabled: false,
     experiments: {
       typedRoutes: true,
     },
