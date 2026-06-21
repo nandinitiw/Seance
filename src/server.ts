@@ -89,7 +89,9 @@ app.post("/api/awaken", async (req, res) => {
  */
 app.post("/api/converse", upload.single("audio"), async (req, res) => {
   try {
-    const objectKey: string = req.body.objectKey;
+    // Normalize so converse reads the same key space awaken wrote (the client
+    // already sends the normalized persona.objectKey, but be robust to callers).
+    const objectKey: string = normalizeKey(req.body.objectKey ?? "");
     const state = await loadState(objectKey);
     if (!state) return res.status(404).json({ error: "Unknown object — awaken it first." });
 
@@ -99,7 +101,16 @@ app.post("/api/converse", upload.single("audio"), async (req, res) => {
       : req.file
         ? await transcribe(req.file.buffer, req.file.mimetype).catch(() => "")
         : "";
-    if (!userText) return res.status(400).json({ error: "No speech or text received." });
+    if (!userText) {
+      // Empty transcript (silence, a too-short clip, or an STT hiccup). Keep the
+      // séance flowing with a gentle in-character nudge, not an error banner.
+      return res.json({
+        userText: "",
+        replyText: "…I didn't quite catch that. Speak up, won't you?",
+        audio: null,
+        voiceModel: state.persona.voiceModel,
+      });
+    }
 
     // 2. The character replies, in persona, remembering the conversation.
     const replyText = await reply(state.persona, state.history, userText, state.encounters);
@@ -262,4 +273,7 @@ app.post("/api/encounter", async (req, res) => {
 app.listen(config.port, () => {
   console.log(`\n🔮 Séance running → http://localhost:${config.port}\n`);
   logCapabilities();
+  // Warm the Redis connection (or trip the in-memory fallback) at boot, so the
+  // first user awaken doesn't pay the connect timeout mid-demo.
+  void loadState("__warmup__").catch(() => {});
 });

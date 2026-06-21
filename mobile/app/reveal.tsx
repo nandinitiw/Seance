@@ -1,14 +1,15 @@
 /**
  * Spirit Card Reveal Screen
  *
- * Route params: personaJson — JSON-stringified AwakenResponse
+ * Reads the awakened spirit (AwakenResponse) from sessionStore — not from nav
+ * params, which would mean serializing a multi-MB portrait data URL each hop.
  *
  * Shows the awakened spirit's card with an entrance animation,
  * then lets the user begin the séance or summon another object.
  */
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -22,6 +23,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Defs, Pattern, Circle, Rect } from "react-native-svg";
 import type { AwakenResponse } from "../src/api";
+import { sessionStore } from "../src/sessionStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -191,29 +193,26 @@ function SpiritCard({ result }: { result: AwakenResponse }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function RevealScreen() {
-  const { personaJson, challengerJson } = useLocalSearchParams<{ personaJson: string; challengerJson?: string }>();
+  const result = sessionStore.getResult();
+  const challengerResult = sessionStore.getChallenger();
 
-  let result: AwakenResponse | null = null;
-  try {
-    result = JSON.parse(personaJson ?? "null") as AwakenResponse;
-  } catch {
-    // handled below
-  }
+  // Idempotent navigation — reset on focus so returning from the conversation
+  // (router.back) re-arms the button, but a double-tap can't push twice.
+  const navLock = useRef(false);
+  useFocusEffect(useCallback(() => { navLock.current = false; }, []));
 
-  const [meetingLoading, setMeetingLoading] = useState(!!challengerJson);
+  const [meetingLoading, setMeetingLoading] = useState(!!challengerResult);
 
   // If this object was awakened as the second in a rival pairing,
   // auto-navigate to the encounter screen immediately.
   // Must be before any early return to satisfy Rules of Hooks.
   useEffect(() => {
-    if (!challengerJson || !result) return;
+    if (!challengerResult || !result) return;
     let cancelled = false;
-    const objectKey2 = result.persona.objectKey;
     (async () => {
       try {
-        const challenger = JSON.parse(challengerJson) as AwakenResponse;
         const { encounter } = await import("../src/api");
-        const data = await encounter(challenger.persona.objectKey, objectKey2);
+        const data = await encounter(challengerResult.persona.objectKey, result.persona.objectKey);
         if (cancelled) return;
         router.replace({
           pathname: "/encounter",
@@ -230,25 +229,34 @@ export default function RevealScreen() {
   if (!result) {
     return (
       <SafeAreaView style={ss.safe}>
+        <LinearGradient
+          colors={['#241C16', '#0e0a08']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
         <View style={ss.center}>
-          <Text style={ss.errorText}>Failed to parse spirit data.</Text>
+          <Text style={ss.errorText}>The spirit faded before it could appear.</Text>
+          <Pressable
+            style={({ pressed }) => [ss.seanceBtn, ss.recoverBtn, pressed && { opacity: 0.85 }]}
+            onPress={() => router.replace("/")}
+          >
+            <Text style={ss.seanceBtnText}>Summon another →</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
   const handleSeance = () => {
-    router.push({
-      pathname: "/conversation",
-      params: { personaJson },
-    });
+    if (navLock.current) return; // ignore double-taps → no duplicate audio sessions
+    navLock.current = true;
+    router.push("/conversation"); // result handed off via the store, not params
   };
 
   const handleIntroduce = () => {
-    router.push({
-      pathname: "/",
-      params: { challengerJson: personaJson },
-    });
+    sessionStore.setChallenger(result);
+    router.push("/");
   };
 
   const handleSummonAnother = () => {
@@ -545,6 +553,10 @@ const ss = StyleSheet.create({
     fontSize: 12,
     color: "#34B7A0",
     letterSpacing: 1.5,
+  },
+  recoverBtn: {
+    width: 240,
+    marginTop: 20,
   },
   anotherWrap: {
     paddingVertical: 8,

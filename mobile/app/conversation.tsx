@@ -1,15 +1,15 @@
 /**
  * Conversation screen — the live voice séance with the awakened spirit.
  *
- * Route params: personaJson — JSON-stringified AwakenResponse
+ * Reads the awakened spirit (AwakenResponse) from sessionStore, not nav params.
  *
- * Architecture: ConversationScreen (parse shell) → ConversationView (voice logic).
+ * Architecture: ConversationScreen (store read) → ConversationView (voice logic).
  * useConverse is only called inside ConversationView, mounted after parsing,
  * so the hook never sees a null persona. Voice is REST hold-to-talk:
  * record → POST /api/converse (STT → Claude → TTS) → play the mp3 reply.
  */
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { AwakenResponse } from "../src/api";
+import { sessionStore } from "../src/sessionStore";
 import {
   useConverse,
   type VoiceStatus,
@@ -37,17 +38,16 @@ const NUM_BARS = 26;
 
 function statusLabel(status: VoiceStatus): string {
   switch (status) {
-    case "idle":
-    case "connecting":
-      return "awaiting your words";
-    case "ready":
-      return "awaiting your words";
     case "user-speaking":
       return "listening…";
     case "agent-speaking":
       return "speaking";
-    default:
+    case "connecting":
       return "channeling…";
+    case "error":
+      return "the connection wavered";
+    default:
+      return "awaiting your words";
   }
 }
 
@@ -441,10 +441,8 @@ function ConversationView({ result }: { result: AwakenResponse }) {
   }, []);
 
   const handleIntroduce = useCallback(() => {
-    router.push({
-      pathname: "/",
-      params: { challengerJson: JSON.stringify(result) },
-    });
+    sessionStore.setChallenger(result);
+    router.push("/");
   }, [result]);
 
   const handleSend = useCallback(() => {
@@ -599,20 +597,25 @@ function ConversationView({ result }: { result: AwakenResponse }) {
 // ── Root screen ───────────────────────────────────────────────────────────────
 
 export default function ConversationScreen() {
-  const { personaJson } = useLocalSearchParams<{ personaJson: string }>();
-
-  let result: AwakenResponse | null = null;
-  try {
-    result = JSON.parse(personaJson ?? "null") as AwakenResponse;
-  } catch {
-    // handled below
-  }
+  const result = sessionStore.getResult();
 
   if (!result) {
     return (
       <SafeAreaView style={cv.safe}>
+        <LinearGradient
+          colors={['#231B15', '#0d0a08']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
         <View style={cv.center}>
           <Text style={cv.errorText}>Could not load spirit data.</Text>
+          <Pressable
+            style={({ pressed }) => [cv.recoverBtn, pressed && { opacity: 0.85 }]}
+            onPress={() => router.replace('/')}
+          >
+            <Text style={cv.recoverBtnText}>Summon another →</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -639,6 +642,20 @@ const cv = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     fontFamily: "DMMono_400Regular",
+  },
+  recoverBtn: {
+    marginTop: 22,
+    backgroundColor: "#D93D1A",
+    borderWidth: 1,
+    borderColor: "#7A1F0C",
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+  },
+  recoverBtnText: {
+    fontFamily: "InstrumentSerif_400Regular",
+    fontSize: 19,
+    color: "#F0E7D6",
   },
   errorBanner: {
     backgroundColor: "rgba(217,61,26,0.12)",

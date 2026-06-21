@@ -4,8 +4,9 @@
  */
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { sessionStore } from '../src/sessionStore';
 import {
   ActivityIndicator,
   Animated,
@@ -58,7 +59,7 @@ function CornerBracket({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function CaptureScreen() {
-  const { challengerJson } = useLocalSearchParams<{ challengerJson?: string }>();
+  const challengerResult = sessionStore.getChallenger();
   const [photo, setPhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +67,11 @@ export default function CaptureScreen() {
   const btnScale = useRef(new Animated.Value(1)).current;
   const scanAnim = useRef(new Animated.Value(0)).current;
   const redDotOpacity = useRef(new Animated.Value(0.5)).current;
+
+  // Idempotent navigation: reset every time this screen regains focus, so a
+  // double-tap can't push two awaken screens (and two awaken() calls).
+  const navLock = useRef(false);
+  useFocusEffect(useCallback(() => { navLock.current = false; }, []));
 
   useEffect(() => {
     Animated.loop(
@@ -89,7 +95,7 @@ export default function CaptureScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       base64: true,
-      quality: 0.8,
+      quality: 0.5,
     });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -109,7 +115,7 @@ export default function CaptureScreen() {
     }
     const result = await ImagePicker.launchCameraAsync({
       base64: true,
-      quality: 0.8,
+      quality: 0.5,
     });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
@@ -127,19 +133,18 @@ export default function CaptureScreen() {
     ]).start();
   }
 
-  async function handleSummon() {
+  function handleSummon() {
     if (!photo) {
       setError('Photograph an object first');
       return;
     }
+    if (navLock.current) return; // ignore double-taps
+    navLock.current = true;
     onPressBtn();
-    setLoading(true);
     setError(null);
-    try {
-      router.push({ pathname: '/awaken', params: { imageDataUrl: photo, ...(challengerJson ? { challengerJson } : {}) } });
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    sessionStore.setImage(photo);
+    router.push('/awaken');
   }
 
   return (
@@ -167,11 +172,11 @@ export default function CaptureScreen() {
           <Text style={styles.brand}>Séance</Text>
 
           {/* Separator row — or rival banner when in introduction mode */}
-          {challengerJson ? (
+          {challengerResult ? (
             <View style={styles.rivalBanner}>
               <Text style={styles.rivalBannerText}>
                 ✦ INTRODUCING{" "}
-                {(() => { try { return (JSON.parse(challengerJson) as { persona: { name: string } }).persona.name.toUpperCase(); } catch { return "THE SPIRIT"; } })()}
+                {challengerResult.persona.name.toUpperCase()}
                 {" "}TO…
               </Text>
             </View>

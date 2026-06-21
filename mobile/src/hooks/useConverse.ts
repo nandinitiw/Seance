@@ -55,6 +55,12 @@ export function useConverse(result: AwakenResponse): ConverseSession {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const mounted = useRef(true);
+  // Guards the press/release race: startRecording is async (permission + audio
+  // mode + createAsync take 100-500ms). startPromiseRef lets stopRecording wait
+  // for it; stopRequestedRef lets startRecording abort if the finger already
+  // lifted, so a quick tap never leaves a recording running with no way to stop.
+  const startPromiseRef = useRef<Promise<void> | null>(null);
+  const stopRequestedRef = useRef(false);
 
   useEffect(() => {
     mounted.current = true;
@@ -134,49 +140,64 @@ export function useConverse(result: AwakenResponse): ConverseSession {
   );
 
   const startRecording = useCallback(async () => {
+    stopRequestedRef.current = false;
     setError(null);
-    try {
-      const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) {
-        setMicDenied(true);
-        return;
+    const run = (async () => {
+      try {
+        const perm = await Audio.requestPermissionsAsync();
+        if (!perm.granted) {
+          setMicDenied(true);
+          return;
+        }
+        setMicDenied(false);
+        await stopSound(); // interrupt the spirit if it's mid-sentence (barge-in)
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        // Finger already lifted while we were setting up? Don't start a recording
+        // that nothing is waiting to stop (the quick-tap race).
+        if (stopRequestedRef.current || !mounted.current) return;
+        const { recording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        );
+        recordingRef.current = recording;
+        if (mounted.current) setStatus("user-speaking");
+      } catch (e: any) {
+        recordingRef.current = null;
+        if (mounted.current) {
+          setStatus("idle");
+          setError(e?.message || "Couldn't start the recording.");
+        }
       }
-      setMicDenied(false);
-      await stopSound(); // interrupt the spirit if it's mid-sentence (barge-in)
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
-      recordingRef.current = recording;
-      if (mounted.current) setStatus("user-speaking");
-    } catch (e: any) {
-      recordingRef.current = null;
-      if (mounted.current) {
-        setStatus("idle");
-        setError(e?.message || "Couldn't start the recording.");
-      }
-    }
+    })();
+    startPromiseRef.current = run;
+    await run;
   }, [stopSound]);
 
   const stopRecording = useCallback(async () => {
+    stopRequestedRef.current = true;
+    // Wait for any in-flight start so we either get the recording or learn it
+    // aborted — otherwise a fast tap leaves a recording running with no stop.
+    if (startPromiseRef.current) {
+      try {
+        await startPromiseRef.current;
+      } catch {
+        // start already surfaced its own error
+      }
+    }
     const rec = recordingRef.current;
-    if (!rec) return; // not recording (e.g. permission was denied)
+    if (!rec) return; // fast tap aborted, or permission denied — nothing to send
     recordingRef.current = null;
     let uri: string | null = null;
     try {
       await rec.stopAndUnloadAsync();
       uri = rec.getURI();
     } catch {
-      // device hiccup / never really started
+      // device hiccup
     }
     if (!uri) {
-      if (mounted.current) {
-        setStatus("idle");
-        setError("Nothing was heard — hold the orb a little longer.");
-      }
+      if (mounted.current) setStatus("idle");
       return;
     }
     await send({ audioUri: uri });
