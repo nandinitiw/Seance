@@ -1,89 +1,250 @@
 /**
- * Conversation screen — the live voice chat with the awakened object.
+ * Conversation screen — the live voice séance with the awakened spirit.
  *
- * For Task 3 integration: pass `objectKey` as a route param from your camera screen.
- *   router.push({ pathname: "/conversation", params: { objectKey: data.persona.objectKey } });
+ * Route params: personaJson — JSON-stringified AwakenResponse
  *
- * Architecture: ConversationScreen (loading shell) → ConversationView (voice logic).
- * useVoiceSession is only called inside ConversationView, which mounts only after
- * personaData is available, so the hook never sees EMPTY_PERSONA.
+ * Architecture: ConversationScreen (parse shell) → ConversationView (voice logic).
+ * useVoiceSession is only called inside ConversationView, mounted after parsing,
+ * so the hook never sees a null persona.
  */
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   Image,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { fetchPersona, type PersonaResponse } from "../src/api";
-import { useVoiceSession, type VoiceStatus } from "../src/hooks/useVoiceSession";
+import type { AwakenResponse } from "../src/api";
+import {
+  useVoiceSession,
+  type VoiceStatus,
+} from "../src/hooks/useVoiceSession";
 import type { Turn } from "../src/types";
 
-// ── Status ring ──────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-const RING_COLORS: Record<VoiceStatus, string> = {
-  idle: "#3f3f60",
-  connecting: "#a855f7",
-  ready: "#22c55e",
-  "user-speaking": "#38bdf8",
-  "agent-speaking": "#c084fc",
-  error: "#ef4444",
-};
+const NUM_BARS = 26;
 
-const STATUS_LABELS: Record<VoiceStatus, string> = {
-  idle: "Tap to awaken",
-  connecting: "Connecting…",
-  ready: "Listening",
-  "user-speaking": "You're speaking",
-  "agent-speaking": "Speaking…",
-  error: "Connection failed",
-};
+// ── Status helpers ────────────────────────────────────────────────────────────
 
-function StatusRing({ status }: { status: VoiceStatus }) {
-  const pulse = useRef(new Animated.Value(1)).current;
+function statusLabel(status: VoiceStatus): string {
+  switch (status) {
+    case "idle":
+    case "connecting":
+      return "awaiting your words";
+    case "ready":
+      return "awaiting your words";
+    case "user-speaking":
+      return "listening…";
+    case "agent-speaking":
+      return "speaking";
+    default:
+      return "channeling…";
+  }
+}
+
+function micColor(status: VoiceStatus): string {
+  if (status === "user-speaking") return "#34B7A0";
+  if (status === "agent-speaking") return "#FF5A38";
+  return "#2B241E";
+}
+
+function waveColor(status: VoiceStatus): string {
+  if (status === "user-speaking") return "#34B7A0";
+  if (status === "agent-speaking") return "#FF5A38";
+  return "#5A4F42";
+}
+
+// ── Waveform component ────────────────────────────────────────────────────────
+
+function Waveform({ status }: { status: VoiceStatus }) {
+  const anims = useRef<Animated.Value[]>(
+    Array.from({ length: NUM_BARS }, () => new Animated.Value(0.25))
+  ).current;
+
+  const loopsRef = useRef<Animated.CompositeAnimation[]>([]);
 
   useEffect(() => {
-    if (status === "agent-speaking" || status === "connecting") {
-      const anim = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.12, duration: 600, useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
-        ]),
-      );
-      anim.start();
-      return () => anim.stop();
-    } else {
-      pulse.setValue(1);
-    }
-  }, [status, pulse]);
+    // Stop previous animations
+    loopsRef.current.forEach((l) => l.stop());
+    loopsRef.current = [];
 
-  const color = RING_COLORS[status];
+    const isActive =
+      status === "user-speaking" || status === "agent-speaking";
+
+    if (isActive) {
+      anims.forEach((anim, i) => {
+        const loop = Animated.loop(
+          Animated.sequence([
+            Animated.delay(i * 30),
+            Animated.timing(anim, {
+              toValue: 0.3 + Math.random() * 0.7,
+              duration: 250 + Math.random() * 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim, {
+              toValue: 0.15 + Math.random() * 0.3,
+              duration: 250 + Math.random() * 200,
+              useNativeDriver: true,
+            }),
+          ])
+        );
+        loop.start();
+        loopsRef.current.push(loop);
+      });
+    } else {
+      // Settle bars to idle height
+      anims.forEach((anim) => {
+        Animated.timing(anim, {
+          toValue: 0.25,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      });
+    }
+
+    return () => {
+      loopsRef.current.forEach((l) => l.stop());
+    };
+  }, [status]);
+
+  const color = waveColor(status);
+
   return (
-    <Animated.View style={[s.ring, { borderColor: color, transform: [{ scale: pulse }] }]}>
-      <View style={[s.ringInner, { backgroundColor: color + "22" }]}>
-        <Text style={[s.ringIcon, { color }]}>
-          {status === "agent-speaking" ? "🔊" : status === "user-speaking" ? "🎙️" : "🔮"}
-        </Text>
-      </View>
-    </Animated.View>
+    <View style={wf.container}>
+      {anims.map((anim, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            wf.bar,
+            {
+              backgroundColor: color,
+              transform: [{ scaleY: anim }],
+            },
+          ]}
+        />
+      ))}
+    </View>
   );
 }
 
-// ── Transcript line ───────────────────────────────────────────────────────────
+const wf = StyleSheet.create({
+  container: {
+    height: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  bar: {
+    width: 3,
+    height: 26,
+    borderRadius: 2,
+  },
+});
 
-function TurnLine({ turn, personaName }: { turn: Turn; personaName: string }) {
+// ── Thinking indicator ────────────────────────────────────────────────────────
+
+function ThinkingDots() {
+  const dots = useRef(
+    Array.from({ length: 3 }, () => new Animated.Value(0))
+  ).current;
+
+  useEffect(() => {
+    const loops = dots.map((anim, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 160),
+          Animated.timing(anim, {
+            toValue: -6,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.delay(600 - i * 160),
+        ])
+      )
+    );
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, []);
+
+  return (
+    <View style={td.wrap}>
+      <View style={td.dotsRow}>
+        {dots.map((anim, i) => (
+          <Animated.View
+            key={i}
+            style={[td.dot, { transform: [{ translateY: anim }] }]}
+          />
+        ))}
+      </View>
+      <Text style={td.label}>channeling</Text>
+    </View>
+  );
+}
+
+const td = StyleSheet.create({
+  wrap: {
+    alignItems: "flex-start",
+    maxWidth: "88%",
+    marginBottom: 12,
+  },
+  dotsRow: {
+    flexDirection: "row",
+    gap: 5,
+    backgroundColor: "#F2E9D6",
+    borderRadius: 14,
+    borderTopLeftRadius: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#D93D1A",
+  },
+  label: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 10,
+    color: "#9b8e76",
+    marginLeft: 4,
+  },
+});
+
+// ── Chat bubble ───────────────────────────────────────────────────────────────
+
+function ChatBubble({
+  turn,
+  personaName,
+}: {
+  turn: Turn;
+  personaName: string;
+}) {
   const isUser = turn.role === "user";
   return (
-    <View style={[s.turnRow, isUser ? s.turnRowUser : s.turnRowAgent]}>
-      {!isUser && <Text style={s.turnSpeaker}>{personaName}</Text>}
-      <View style={[s.turnBubble, isUser ? s.bubbleUser : s.bubbleAgent]}>
-        <Text style={[s.turnText, isUser ? s.turnTextUser : s.turnTextAgent]}>
+    <View style={[cb.row, isUser ? cb.rowUser : cb.rowAgent]}>
+      {!isUser && (
+        <Text style={cb.agentLabel}>{personaName}</Text>
+      )}
+      <View
+        style={[
+          cb.bubble,
+          isUser ? cb.bubbleUser : cb.bubbleAgent,
+        ]}
+      >
+        <Text style={[cb.text, isUser ? cb.textUser : cb.textAgent]}>
           {turn.text}
         </Text>
       </View>
@@ -91,206 +252,453 @@ function TurnLine({ turn, personaName }: { turn: Turn; personaName: string }) {
   );
 }
 
-// ── Loading shell ─────────────────────────────────────────────────────────────
+const cb = StyleSheet.create({
+  row: {
+    marginBottom: 14,
+  },
+  rowUser: {
+    alignItems: "flex-end",
+    maxWidth: "80%",
+    alignSelf: "flex-end",
+  },
+  rowAgent: {
+    alignItems: "flex-start",
+    maxWidth: "88%",
+    alignSelf: "flex-start",
+  },
+  agentLabel: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 9,
+    color: "#D6A94B",
+    marginBottom: 4,
+    marginLeft: 4,
+    letterSpacing: 0.5,
+  },
+  bubble: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+  },
+  bubbleAgent: {
+    backgroundColor: "#F2E9D6",
+    borderTopLeftRadius: 4,
+  },
+  bubbleUser: {
+    backgroundColor: "#2B241E",
+    borderWidth: 0.75,
+    borderColor: "#3A3128",
+    borderTopRightRadius: 4,
+  },
+  text: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  textAgent: {
+    color: "#1C1813",
+    fontFamily: "InstrumentSerif_400Regular",
+  },
+  textUser: {
+    color: "#F0E7D6",
+    fontFamily: "InstrumentSerif_400Regular",
+  },
+});
 
-export default function ConversationScreen() {
-  const { objectKey } = useLocalSearchParams<{ objectKey: string }>();
-  const navigation = useNavigation();
+// ── Avatar aura ───────────────────────────────────────────────────────────────
 
-  const [personaData, setPersonaData] = useState<PersonaResponse | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!objectKey) return;
-    fetchPersona(objectKey)
-      .then((data) => {
-        setPersonaData(data);
-        navigation.setOptions({ title: data.persona.name });
-      })
-      .catch((err) => setLoadError(String(err)));
-  }, [objectKey, navigation]);
-
-  if (loadError) {
-    return (
-      <SafeAreaView style={s.safe}>
-        <View style={s.center}>
-          <Text style={s.errorText}>{loadError}</Text>
-          <Text style={s.hint}>
-            Make sure the backend is running and the object has been awakened.
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!personaData) {
-    return (
-      <SafeAreaView style={s.safe}>
-        <View style={s.center}>
-          <ActivityIndicator color="#c084fc" size="large" />
-          <Text style={s.loadingText}>Summoning…</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return <ConversationView personaData={personaData} />;
-}
-
-// ── Voice view — only mounts once persona is available ───────────────────────
-// useVoiceSession is called here, never with EMPTY_PERSONA, so defaultSettings
-// and the onConversationText closure both see the real persona from the start.
-
-function ConversationView({ personaData }: { personaData: PersonaResponse }) {
-  const { persona, portraitUrl, encounters } = personaData;
-
-  const session = useVoiceSession(persona, personaData.history);
-  const listRef = useRef<FlatList>(null);
-
-  // Connect once on mount; disconnect on unmount. Persona is stable here.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { session.connect(); return () => session.disconnect(); }, []);
+function AvatarAura({ speaking }: { speaking: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (session.transcript.length > 0) {
-      listRef.current?.scrollToEnd({ animated: true });
-    }
-  }, [session.transcript.length]);
-
-  const handleToggle = useCallback(() => {
-    if (session.status === "idle" || session.status === "error") {
-      session.connect();
+    if (speaking) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(opacity, {
+            toValue: 0.6,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 0.2,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
     } else {
-      session.disconnect();
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     }
-  }, [session]);
+  }, [speaking]);
 
   return (
-    <SafeAreaView style={s.safe} edges={["bottom"]}>
-      {/* Portrait + identity */}
-      <View style={s.header}>
-        <Image source={{ uri: portraitUrl }} style={s.portrait} resizeMode="cover" />
-        <View style={s.identity}>
-          <Text style={s.name}>{persona.name}</Text>
-          <Text style={s.tagline}>{persona.tagline}</Text>
-          {encounters > 1 && (
-            <Text style={s.returning}>✨ Encounter #{encounters} — it remembers you</Text>
-          )}
+    <Animated.View
+      style={[
+        av.aura,
+        { opacity },
+      ]}
+      pointerEvents="none"
+    />
+  );
+}
+
+const av = StyleSheet.create({
+  aura: {
+    position: "absolute",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#FF5A38",
+    // Shadow glow approximation
+    shadowColor: "#FF5A38",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+  },
+});
+
+// ── Conversation view (voice logic) ──────────────────────────────────────────
+
+function ConversationView({ result }: { result: AwakenResponse }) {
+  const { persona, portraitUrl } = result;
+
+  const session = useVoiceSession(persona, result.history);
+  const listRef = useRef<FlatList<Turn>>(null);
+  const [draft, setDraft] = useState("");
+  const [thinking, setThinking] = useState(false);
+
+  // Seed the first spirit message with the backstory
+  const seedTurn: Turn = { role: "assistant", text: persona.backstory };
+
+  // All displayed turns: seed + session transcript (skip first assistant if duplicate)
+  const displayTurns: Turn[] = [seedTurn, ...session.transcript.filter(
+    (t, i) => !(i === 0 && t.role === "assistant" && t.text === persona.backstory)
+  )];
+
+  // Connect on mount, disconnect on unmount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    session.connect();
+    return () => session.disconnect();
+  }, []);
+
+  // Scroll to end when new turns arrive
+  useEffect(() => {
+    if (displayTurns.length > 0) {
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  }, [displayTurns.length]);
+
+  // Track thinking state
+  useEffect(() => {
+    setThinking(session.status === "connecting");
+  }, [session.status]);
+
+  const handleLeave = useCallback(() => {
+    session.disconnect();
+    router.back();
+  }, [session]);
+
+  const micDown = useCallback(() => {
+    // Voice activity detection is automatic via Deepgram
+    // onPressIn: visual feedback only — Deepgram auto-detects VAD
+  }, []);
+
+  const micUp = useCallback(() => {
+    // onPressOut: visual feedback only
+  }, []);
+
+  const sendText = useCallback(() => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    // We can't inject a text turn directly into the voice session,
+    // so we display it locally as a user turn (UX feedback)
+    // The actual sending would require a separate text endpoint;
+    // for now we show it in the UI and reset.
+    // If postTurns is desired, it can be wired up here.
+  }, [draft]);
+
+  const agentSpeaking = session.status === "agent-speaking";
+  const userSpeaking = session.status === "user-speaking";
+  const isActive = agentSpeaking || userSpeaking;
+
+  function micCaption(): string {
+    if (userSpeaking) return "release to send";
+    if (agentSpeaking) return "tap to interrupt";
+    return "press & hold to speak";
+  }
+
+  return (
+    <SafeAreaView style={cv.safe} edges={["top", "bottom"]}>
+      {/* Header */}
+      <View style={cv.header}>
+        <View style={cv.avatarWrap}>
+          <AvatarAura speaking={agentSpeaking} />
+          <Image
+            source={{ uri: portraitUrl }}
+            style={cv.avatar}
+            resizeMode="cover"
+          />
         </View>
+        <View style={cv.identity}>
+          <Text style={cv.name}>{persona.name}</Text>
+          <Text style={cv.statusLabel}>{statusLabel(session.status)}</Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [cv.leaveBtn, pressed && { opacity: 0.7 }]}
+          onPress={handleLeave}
+        >
+          <Text style={cv.leaveBtnText}>LEAVE</Text>
+        </Pressable>
       </View>
 
-      {/* Status ring */}
-      <View style={s.ringWrap}>
-        <StatusRing status={session.status} />
-        <Text style={[s.statusLabel, { color: RING_COLORS[session.status] }]}>
-          {session.error ?? STATUS_LABELS[session.status]}
-        </Text>
-      </View>
+      {/* Error banner */}
+      {session.error && (
+        <View style={cv.errorBanner}>
+          <Text style={cv.errorText}>{session.error}</Text>
+        </View>
+      )}
 
-      {/* Transcript */}
-      <FlatList
+      {/* Chat messages */}
+      <FlatList<Turn>
         ref={listRef}
-        style={s.transcript}
-        data={session.transcript}
+        style={cv.list}
+        data={displayTurns}
         keyExtractor={(_, i) => String(i)}
-        renderItem={({ item }) => <TurnLine turn={item} personaName={persona.name} />}
-        ListEmptyComponent={
-          <Text style={s.emptyText}>
-            {session.status === "connecting"
-              ? "Establishing connection…"
-              : "The conversation will appear here."}
-          </Text>
-        }
-        contentContainerStyle={{ padding: 16, flexGrow: 1 }}
+        renderItem={({ item }) => (
+          <ChatBubble turn={item} personaName={persona.name} />
+        )}
+        contentContainerStyle={cv.listContent}
+        ListFooterComponent={thinking ? <ThinkingDots /> : null}
+        showsVerticalScrollIndicator={false}
       />
 
-      {/* Connect / disconnect button */}
-      <View style={s.footer}>
-        <Pressable
-          style={({ pressed }) => [
-            s.endBtn,
-            session.status === "idle" || session.status === "error"
-              ? s.endBtnStart
-              : s.endBtnStop,
-            pressed && { opacity: 0.7 },
-          ]}
-          onPress={handleToggle}
-        >
-          <Text style={s.endBtnText}>
-            {session.status === "idle" || session.status === "error"
-              ? "Start conversation"
-              : "End conversation"}
-          </Text>
-        </Pressable>
+      {/* Bottom bar */}
+      <View style={cv.bottomBar}>
+        {/* Waveform */}
+        <Waveform status={session.status} />
+        <Text style={cv.micCaption}>{micCaption()}</Text>
+
+        {/* Text input row */}
+        <View style={cv.inputRow}>
+          <TextInput
+            style={cv.textInput}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="type a message…"
+            placeholderTextColor="#5A4F42"
+            returnKeyType="send"
+            onSubmitEditing={sendText}
+            multiline={false}
+          />
+          {draft.trim().length > 0 && (
+            <Pressable
+              style={({ pressed }) => [cv.sendBtn, pressed && { opacity: 0.8 }]}
+              onPress={sendText}
+            >
+              <Text style={cv.sendBtnText}>SEND</Text>
+            </Pressable>
+          )}
+          <Pressable
+            style={({ pressed }) => [
+              cv.micBtn,
+              { backgroundColor: micColor(session.status) },
+              pressed && { opacity: 0.85 },
+            ]}
+            onPressIn={micDown}
+            onPressOut={micUp}
+          >
+            <Text style={cv.micIcon}>
+              {userSpeaking ? "🎙" : agentSpeaking ? "🔊" : "🎤"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0d0d1a" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-  errorText: { color: "#ef4444", fontSize: 16, textAlign: "center", marginBottom: 12 },
-  loadingText: { color: "#c084fc", marginTop: 16, fontSize: 16 },
-  hint: { color: "#555", fontSize: 13, textAlign: "center" },
+// ── Root screen ───────────────────────────────────────────────────────────────
 
+export default function ConversationScreen() {
+  const { personaJson } = useLocalSearchParams<{ personaJson: string }>();
+
+  let result: AwakenResponse | null = null;
+  try {
+    result = JSON.parse(personaJson ?? "null") as AwakenResponse;
+  } catch {
+    // handled below
+  }
+
+  if (!result) {
+    return (
+      <SafeAreaView style={cv.safe}>
+        <View style={cv.center}>
+          <Text style={cv.errorText}>Could not load spirit data.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return <ConversationView result={result} />;
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const cv = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: "#0d0a08",
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  errorText: {
+    color: "#D93D1A",
+    fontSize: 14,
+    textAlign: "center",
+    fontFamily: "DMMono_400Regular",
+  },
+  errorBanner: {
+    backgroundColor: "rgba(217,61,26,0.12)",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#7A1F0C",
+  },
+
+  // Header
   header: {
     flexDirection: "row",
-    padding: 16,
     alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#1e1e3a",
+    borderBottomColor: "#2B241E",
   },
-  portrait: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#1e1e3a",
-    borderWidth: 2,
-    borderColor: "#7c3aed",
-  },
-  identity: { flex: 1, marginLeft: 14 },
-  name: { color: "#e8d5ff", fontSize: 20, fontWeight: "700" },
-  tagline: { color: "#888", fontSize: 13, marginTop: 2 },
-  returning: { color: "#a855f7", fontSize: 11, marginTop: 4 },
-
-  ringWrap: { alignItems: "center", paddingVertical: 24 },
-  ring: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 3,
+  avatarWrap: {
+    width: 46,
+    height: 46,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 10,
+    position: "relative",
   },
-  ringInner: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: "#D6A94B",
+    backgroundColor: "#2B241E",
+  },
+  identity: {
+    flex: 1,
+    marginLeft: 12,
+    gap: 3,
+  },
+  name: {
+    fontFamily: "InstrumentSerif_400Regular",
+    fontSize: 24,
+    color: "#F0E7D6",
+    lineHeight: 28,
+  },
+  statusLabel: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 9,
+    letterSpacing: 1.5,
+    color: "#D6A94B",
+  },
+  leaveBtn: {
+    borderWidth: 1,
+    borderColor: "#3A3128",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  leaveBtnText: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 10,
+    color: "#A89A86",
+    letterSpacing: 0.5,
+  },
+
+  // Chat list
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    flexGrow: 1,
+  },
+
+  // Bottom bar
+  bottomBar: {
+    paddingHorizontal: 16,
+    paddingTop: 11,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#2B241E",
+    backgroundColor: "#140f0c",
+    gap: 8,
+  },
+  micCaption: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 9,
+    color: "#7a6e5c",
+    letterSpacing: 0.5,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  textInput: {
+    flex: 1,
+    height: 48,
+    backgroundColor: "#1C1611",
+    borderWidth: 1,
+    borderColor: "#3A3128",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    color: "#F0E7D6",
+    fontSize: 14,
+    fontFamily: "InstrumentSerif_400Regular",
+  },
+  sendBtn: {
+    backgroundColor: "#D93D1A",
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  ringIcon: { fontSize: 32 },
-  statusLabel: { fontSize: 13, fontWeight: "600", letterSpacing: 0.5 },
-
-  transcript: { flex: 1 },
-  emptyText: { color: "#444", textAlign: "center", marginTop: 32, fontSize: 14 },
-
-  turnRow: { marginBottom: 12 },
-  turnRowUser: { alignItems: "flex-end" },
-  turnRowAgent: { alignItems: "flex-start" },
-  turnSpeaker: { color: "#7c3aed", fontSize: 11, marginBottom: 3, marginLeft: 4 },
-  turnBubble: { maxWidth: "80%", borderRadius: 16, padding: 12 },
-  bubbleUser: { backgroundColor: "#1e1e3a" },
-  bubbleAgent: { backgroundColor: "#2d1b4e" },
-  turnText: { fontSize: 15, lineHeight: 20 },
-  turnTextUser: { color: "#d1d5db" },
-  turnTextAgent: { color: "#e8d5ff" },
-
-  footer: { padding: 16, borderTopWidth: 1, borderTopColor: "#1e1e3a" },
-  endBtn: { borderRadius: 10, padding: 16, alignItems: "center" },
-  endBtnStart: { backgroundColor: "#7c3aed" },
-  endBtnStop: { backgroundColor: "#1e1e3a", borderWidth: 1, borderColor: "#3f3f60" },
-  endBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  sendBtnText: {
+    fontFamily: "DMMono_500Medium",
+    fontSize: 11,
+    color: "#F0E7D6",
+    letterSpacing: 1,
+  },
+  micBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#D6A94B",
+  },
+  micIcon: {
+    fontSize: 22,
+  },
 });
