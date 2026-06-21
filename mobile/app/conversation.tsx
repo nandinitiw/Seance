@@ -139,7 +139,7 @@ const wf = StyleSheet.create({
     height: 34,
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: 3,
   },
   bar: {
     width: 3,
@@ -272,7 +272,7 @@ const cb = StyleSheet.create({
     color: "#D6A94B",
     marginBottom: 4,
     marginLeft: 4,
-    letterSpacing: 0.5,
+    letterSpacing: 1.5,
   },
   bubble: {
     borderRadius: 14,
@@ -290,7 +290,7 @@ const cb = StyleSheet.create({
     borderTopRightRadius: 4,
   },
   text: {
-    fontSize: 15,
+    fontSize: 14,
     lineHeight: 22,
   },
   textAgent: {
@@ -313,7 +313,7 @@ function AvatarAura({ speaking }: { speaking: boolean }) {
       const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(opacity, {
-            toValue: 0.6,
+            toValue: 0.75,
             duration: 700,
             useNativeDriver: true,
           }),
@@ -361,6 +361,52 @@ const av = StyleSheet.create({
   },
 });
 
+// ── Mic icon ─────────────────────────────────────────────────────────────────
+
+function MicIcon({ status }: { status: VoiceStatus }) {
+  const isListening = status === 'user-speaking';
+  const isSpeaking = status === 'agent-speaking';
+
+  if (isSpeaking) {
+    // Stop square icon
+    return (
+      <View style={{
+        width: 15, height: 15, borderRadius: 3,
+        backgroundColor: '#160F0C',
+      }} />
+    );
+  }
+
+  const color = isListening ? '#160F0C' : '#D6A94B';
+  return (
+    <View style={{ alignItems: 'center' }}>
+      {/* Capsule top */}
+      <View style={{
+        width: 11, height: 17,
+        borderRadius: 6,
+        backgroundColor: color,
+      }} />
+      {/* Arc */}
+      <View style={{
+        width: 17, height: 7,
+        borderBottomWidth: 2,
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderColor: color,
+        borderBottomLeftRadius: 9,
+        borderBottomRightRadius: 9,
+        marginTop: -3,
+      }} />
+      {/* Stem */}
+      <View style={{
+        width: 2, height: 4,
+        backgroundColor: color,
+        marginTop: 1,
+      }} />
+    </View>
+  );
+}
+
 // ── Conversation view (voice logic) ──────────────────────────────────────────
 
 function ConversationView({ result }: { result: AwakenResponse }) {
@@ -370,6 +416,7 @@ function ConversationView({ result }: { result: AwakenResponse }) {
   const listRef = useRef<FlatList<Turn>>(null);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
+  const micScale = useRef(new Animated.Value(1)).current;
 
   // Seed the first spirit message with the backstory
   const seedTurn: Turn = { role: "assistant", text: persona.backstory };
@@ -427,6 +474,21 @@ function ConversationView({ result }: { result: AwakenResponse }) {
   const userSpeaking = session.status === "user-speaking";
   const isActive = agentSpeaking || userSpeaking;
 
+  useEffect(() => {
+    if (isActive) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(micScale, { toValue: 1.07, duration: 600, useNativeDriver: true }),
+          Animated.timing(micScale, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      micScale.setValue(1);
+    }
+  }, [isActive]);
+
   function micCaption(): string {
     if (userSpeaking) return "release to send";
     if (agentSpeaking) return "tap to interrupt";
@@ -480,9 +542,13 @@ function ConversationView({ result }: { result: AwakenResponse }) {
 
       {/* Bottom bar */}
       <View style={cv.bottomBar}>
-        {/* Waveform */}
-        <Waveform status={session.status} />
-        <Text style={cv.micCaption}>{micCaption()}</Text>
+        {/* Waveform row */}
+        <View style={cv.waveRow}>
+          <View style={{ flex: 1 }}>
+            <Waveform status={session.status} />
+          </View>
+          <Text style={cv.micCaption}>{micCaption()}</Text>
+        </View>
 
         {/* Text input row */}
         <View style={cv.inputRow}>
@@ -504,19 +570,26 @@ function ConversationView({ result }: { result: AwakenResponse }) {
               <Text style={cv.sendBtnText}>SEND</Text>
             </Pressable>
           )}
-          <Pressable
-            style={({ pressed }) => [
-              cv.micBtn,
-              { backgroundColor: micColor(session.status) },
-              pressed && { opacity: 0.85 },
-            ]}
-            onPressIn={micDown}
-            onPressOut={micUp}
-          >
-            <Text style={cv.micIcon}>
-              {userSpeaking ? "🎙" : agentSpeaking ? "🔊" : "🎤"}
-            </Text>
-          </Pressable>
+          <Animated.View style={{ transform: [{ scale: micScale }] }}>
+            <Pressable
+              style={({ pressed }) => [
+                cv.micBtn,
+                { backgroundColor: micColor(session.status) },
+                isActive && {
+                  shadowColor: micColor(session.status),
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 1,
+                  shadowRadius: 12,
+                  elevation: 8,
+                },
+                pressed && { opacity: 0.85 },
+              ]}
+              onPressIn={micDown}
+              onPressOut={micUp}
+            >
+              <MicIcon status={session.status} />
+            </Pressable>
+          </Animated.View>
         </View>
       </View>
     </SafeAreaView>
@@ -586,8 +659,8 @@ const cv = StyleSheet.create({
     borderBottomColor: "#2B241E",
   },
   avatarWrap: {
-    width: 46,
-    height: 46,
+    width: 60,
+    height: 60,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -620,15 +693,15 @@ const cv = StyleSheet.create({
   leaveBtn: {
     borderWidth: 1,
     borderColor: "#3A3128",
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    borderRadius: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
   leaveBtnText: {
     fontFamily: "DMMono_400Regular",
     fontSize: 10,
     color: "#A89A86",
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
 
   // Chat list
@@ -669,7 +742,7 @@ const cv = StyleSheet.create({
     backgroundColor: "#1C1611",
     borderWidth: 1,
     borderColor: "#3A3128",
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 14,
     color: "#F0E7D6",
     fontSize: 14,
@@ -695,10 +768,13 @@ const cv = StyleSheet.create({
     borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: "#D6A94B",
   },
-  micIcon: {
-    fontSize: 22,
+  waveRow: {
+    height: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
 });

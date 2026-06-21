@@ -4,7 +4,7 @@
  */
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -62,6 +62,21 @@ export default function CaptureScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const btnScale = useRef(new Animated.Value(1)).current;
+  const scanAnim = useRef(new Animated.Value(0)).current;
+  const redDotOpacity = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(scanAnim, { toValue: 1, duration: 3600, useNativeDriver: true })
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(redDotOpacity, { toValue: 1, duration: 650, useNativeDriver: true }),
+        Animated.timing(redDotOpacity, { toValue: 0.5, duration: 650, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [scanAnim, redDotOpacity]);
 
   async function pickImageFromLibrary() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -167,6 +182,24 @@ export default function CaptureScreen() {
               </View>
             )}
 
+            {/* Scan animation */}
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFillObject,
+                {
+                  transform: [{
+                    translateY: scanAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-130, 280],
+                    }),
+                  }],
+                  height: 120,
+                  backgroundColor: 'rgba(214,169,75,0.08)',
+                },
+              ]}
+              pointerEvents="none"
+            />
+
             {/* Corner brackets */}
             <CornerBracket position="tl" />
             <CornerBracket position="tr" />
@@ -175,7 +208,7 @@ export default function CaptureScreen() {
 
             {/* Top-left label */}
             <View style={styles.vfLabelTopLeft}>
-              <View style={styles.redDot} />
+              <Animated.View style={[styles.redDot, { opacity: redDotOpacity }]} />
               <Text style={styles.vfLabelText}>VIEWFINDER</Text>
             </View>
 
@@ -186,7 +219,7 @@ export default function CaptureScreen() {
 
             {/* Bottom CTA */}
             <View style={styles.vfBottomCta}>
-              <Text style={styles.vfBottomCtaText}>TAP TO PHOTOGRAPH YOUR OBJECT</Text>
+              <Text style={styles.vfBottomCtaText}>TAP TO LOAD YOUR OWN OBJECT</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -234,21 +267,18 @@ export default function CaptureScreen() {
             <Text style={styles.ledgerLabel}>THE LEDGER</Text>
             <Text style={styles.ledgerCount}>3 souls bound</Text>
           </View>
-          {LEDGER.map((entry) => (
-            <View key={entry.name} style={[styles.ledgerCard, { borderLeftColor: entry.tone }]}>
-              <View style={styles.ledgerCardInner}>
-                <View>
-                  <Text style={styles.ledgerName}>{entry.name}</Text>
-                  <Text style={styles.ledgerObj}>{entry.obj}</Text>
-                </View>
-                <View style={[styles.ledgerBadge, { backgroundColor: entry.tone + '22' }]}>
-                  <Text style={[styles.ledgerBadgeText, { color: entry.tone }]}>
-                    {entry.n}×
-                  </Text>
+          <View style={{ flexDirection: 'row', gap: 7 }}>
+            {LEDGER.map((entry) => (
+              <View key={entry.name} style={[styles.ledgerCard, { borderLeftColor: entry.tone, flex: 1, minWidth: 0 }]}>
+                <View style={styles.ledgerCardInner}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.ledgerName} numberOfLines={1}>{entry.name}</Text>
+                    <Text style={styles.ledgerObj} numberOfLines={1}>{entry.obj} · ×{entry.n}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))}
+            ))}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -287,7 +317,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.serif,
     fontSize: 58,
     color: C.textDark,
-    lineHeight: 58 * 0.9,
+    lineHeight: 50,
     marginBottom: 10,
   },
   separatorRow: {
@@ -439,6 +469,8 @@ const styles = StyleSheet.create({
   },
   summonBtnPressed: {
     backgroundColor: C.redDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
   },
   summonBtnDisabled: {
     opacity: 0.6,
@@ -504,17 +536,18 @@ const styles = StyleSheet.create({
   },
   ledgerCard: {
     borderLeftWidth: 3,
-    backgroundColor: 'rgba(28,24,19,0.06)',
-    borderRadius: R.sm,
-    marginBottom: SP.sm,
+    backgroundColor: '#F6EFE0',
+    borderRadius: 5,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#D8C9AC',
   },
   ledgerCardInner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SP.md,
-    paddingVertical: SP.sm + 2,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
   },
   ledgerName: {
     fontFamily: FONTS.serif,

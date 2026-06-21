@@ -3,6 +3,7 @@
  * Dark channeling screen shown while the backend processes the object photo.
  * Calls awaken() API, animates progress + log lines, then navigates to /reveal.
  */
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -96,6 +97,7 @@ export default function AwakenScreen() {
 
   const [visibleLogCount, setVisibleLogCount] = useState(0);
   const [statusText, setStatusText] = useState('channeling');
+  const [progressPct, setProgressPct] = useState(0);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const breatheAnim = useRef(new Animated.Value(1)).current;
@@ -117,6 +119,7 @@ export default function AwakenScreen() {
 
   useEffect(() => {
     // Progress bar animation over ~3.2s
+    progressAnim.addListener(({ value }) => setProgressPct(Math.round(value * 100)));
     Animated.timing(progressAnim, {
       toValue: 1,
       duration: 3200,
@@ -181,6 +184,7 @@ export default function AwakenScreen() {
       breathe.stop();
       timers.forEach(clearTimeout);
       clearTimeout(minTimer);
+      progressAnim.removeAllListeners();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -212,20 +216,31 @@ export default function AwakenScreen() {
             <View style={styles.photoPlaceholder} />
           )}
           {/* Halftone overlay approximation */}
-          <View style={styles.photoOverlay} />
+          <LinearGradient
+            colors={['rgba(255,90,56,0.18)', 'transparent', 'rgba(52,183,160,0.16)']}
+            start={{ x: 0.15, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+            pointerEvents="none"
+          />
         </Animated.View>
-
-        {/* Status label */}
-        <Text style={styles.statusLabel}>{statusText.toUpperCase()}</Text>
 
         {/* Progress bar */}
         <View style={styles.progressTrack}>
-          <Animated.View
-            style={[
-              styles.progressFill,
-              { width: progressWidth },
-            ]}
-          />
+          <Animated.View style={[styles.progressFillWrap, { width: progressWidth }]}>
+            <LinearGradient
+              colors={['#34B7A0', '#FF5A38']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </Animated.View>
+        </View>
+
+        {/* Progress labels */}
+        <View style={styles.progressLabels}>
+          <Text style={styles.channelingLabel}>CHANNELING</Text>
+          <Text style={styles.pctLabel}>{progressPct}%</Text>
         </View>
 
         {/* Log lines */}
@@ -260,14 +275,14 @@ const styles = StyleSheet.create({
 
   topGlow: {
     position: 'absolute',
-    top: -60,
+    top: '8%',
     left: '50%',
-    marginLeft: -120,
-    width: 240,
-    height: 180,
-    borderRadius: 120,
-    backgroundColor: C.red,
-    opacity: 0.12,
+    marginLeft: -140,
+    width: 280,
+    height: 200,
+    borderRadius: 140,
+    backgroundColor: '#FF5A38',
+    opacity: 0.22,
   },
 
   content: {
@@ -287,10 +302,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: SP.lg + 4,
     // Shadow
-    shadowColor: C.amberBright,
+    shadowColor: '#FF5A38',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
+    shadowOpacity: 0.32,
+    shadowRadius: 20,
     elevation: 12,
   },
   photoImage: {
@@ -301,21 +316,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1A120D',
   },
-  photoOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(184,146,60,0.05)',
-  },
-
-  // Status label
-  statusLabel: {
-    fontFamily: FONTS.mono,
-    fontSize: 9,
-    letterSpacing: 3,
-    color: C.amber,
-    marginBottom: SP.sm,
-    textTransform: 'uppercase',
-  },
-
   // Progress bar
   progressTrack: {
     width: 210,
@@ -323,12 +323,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#2B241E',
     borderRadius: 2,
     overflow: 'hidden',
+  },
+  progressFillWrap: {
+    height: '100%',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: 210,
+    marginTop: 8,
     marginBottom: SP.lg,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: C.teal,
-    borderRadius: 2,
+  channelingLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    letterSpacing: 2,
+    color: '#FF5A38',
+  },
+  pctLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    letterSpacing: 1,
+    color: C.textDimmer,
   },
 
   // Log lines
@@ -349,7 +367,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   logMarkDone: {
-    color: C.teal,
+    color: '#5A4F42',
   },
   logText: {
     fontFamily: FONTS.mono,
@@ -361,7 +379,7 @@ const styles = StyleSheet.create({
     color: C.textLight,
   },
   logTextDone: {
-    color: C.textDimmer,
+    color: '#8A7C68',
     opacity: 0.7,
   },
 });

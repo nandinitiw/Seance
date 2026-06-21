@@ -6,6 +6,7 @@
  * Shows the awakened spirit's card with an entrance animation,
  * then lets the user begin the séance or summon another object.
  */
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef } from "react";
 import {
@@ -112,6 +113,13 @@ function SpiritCard({ result }: { result: AwakenResponse }) {
           style={cs.photo}
           resizeMode="cover"
         />
+        <LinearGradient
+          colors={['rgba(255,90,56,0.16)', 'transparent', 'rgba(52,183,160,0.14)']}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        />
         <View style={cs.photoLabel}>
           <Text style={cs.photoLabelText}>★ AWAKENED · {formatDate()}</Text>
         </View>
@@ -138,7 +146,7 @@ function SpiritCard({ result }: { result: AwakenResponse }) {
           <Text style={cs.statLabel}>ENCOUNTERS</Text>
           <Text style={cs.statValue}>{encounters}</Text>
         </View>
-        <Text style={cs.statDivider}>|</Text>
+        <View style={cs.statDividerLine} />
         <View style={cs.statItem}>
           <Text style={cs.statLabel}>VOICE</Text>
           <Text style={cs.statValueMono}>
@@ -235,6 +243,11 @@ const cs = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 20,
     paddingBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 30 },
+    shadowOpacity: 0.55,
+    shadowRadius: 32,
+    elevation: 20,
   },
   cardHeader: {
     flexDirection: "row",
@@ -346,11 +359,14 @@ const cs = StyleSheet.create({
     fontFamily: "DMMono_400Regular",
     fontSize: 11,
     color: "#1C1813",
+    lineHeight: 17,
+    marginTop: 3,
   },
-  statDivider: {
-    color: "#C9BCA2",
-    fontSize: 18,
-    paddingHorizontal: 8,
+  statDividerLine: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#C9BCA2',
+    marginHorizontal: 8,
   },
   backstory: {
     fontFamily: "InstrumentSerif_400Regular",
@@ -376,15 +392,16 @@ const cs = StyleSheet.create({
     right: -22,
     width: 90,
     backgroundColor: "#D93D1A",
-    paddingVertical: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 38,
     transform: [{ rotate: "45deg" }],
     alignItems: "center",
   },
   ribbonText: {
     fontFamily: "DMMono_400Regular",
     fontSize: 7.5,
-    color: "#F2E9D6",
-    letterSpacing: 0.5,
+    color: "#F6EFE0",
+    letterSpacing: 1.5,
   },
 });
 
@@ -439,8 +456,9 @@ const ss = StyleSheet.create({
   },
   anotherText: {
     fontFamily: "DMMono_400Regular",
-    fontSize: 11,
+    fontSize: 9.5,
     color: "#8a7c68",
     textDecorationLine: "underline",
+    letterSpacing: 1,
   },
 });
