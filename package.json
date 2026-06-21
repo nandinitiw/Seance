@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test:persona": "tsx scripts/test-persona.ts",
     "test:gemini": "tsx scripts/test-gemini.ts",
+    "test:history": "tsx scripts/test-history.ts",
     "prebake": "tsx scripts/prebake.ts"
   },
   "dependencies": {
