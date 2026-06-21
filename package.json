@@ -8,6 +8,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
+    "test": "ANTHROPIC_API_KEY= DEEPGRAM_API_KEY= REDIS_URL= node --import tsx --test test/*.test.ts",
     "test:persona": "tsx scripts/test-persona.ts",
     "test:gemini": "tsx scripts/test-gemini.ts",
     "prebake": "tsx scripts/prebake.ts"
