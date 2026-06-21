@@ -121,7 +121,7 @@ export default function AwakenScreen() {
     ) {
       navigatedRef.current = true;
       sessionStore.setResult(resultRef.current);
-      router.replace('/reveal'); // result handed off via the store, not params
+      router.replace('/reveal');
     }
   }
 
