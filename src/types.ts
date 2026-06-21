@@ -36,6 +36,24 @@ export type Archetype =
   | "brooding_vampire"
   | "mob_boss";
 
+/**
+ * The voice the LLM picks to match the personality. `model` chooses the Deepgram
+ * timbre; rate/pitch/volume shape delivery — applied natively to browser TTS and
+ * approximated on the Deepgram audio via playbackRate/volume.
+ */
+export interface VoiceSettings {
+  /** Deepgram Aura-2 voice id (the closest-fitting timbre). Mirrors persona.voiceModel. */
+  model: string;
+  /** Speaking rate, 0.6 (slow drawl) – 1.6 (fast patter). 1 = normal. */
+  rate: number;
+  /** Pitch, 0.4 (deep) – 1.8 (squeaky). 1 = normal. (Browser TTS only.) */
+  pitch: number;
+  /** Loudness, 0.5 (hushed) – 1 (full). */
+  volume: number;
+  /** Short description of the voice, e.g. "gravelly, impatient, dry sarcasm". */
+  style: string;
+}
+
 export interface Persona {
   /**
    * Whether Claude confidently identified a real object in the photo. When
@@ -60,8 +78,10 @@ export interface Persona {
   backstory: string;
   /** Adjectives that define the voice & attitude, e.g. ["bitter", "regal"]. */
   traits: string[];
-  /** A Deepgram TTS voice id that fits the character. */
+  /** A Deepgram TTS voice id that fits the character (also in voice.model). */
   voiceModel: string;
+  /** Full voice profile the LLM picked to match the personality. */
+  voice: VoiceSettings;
   /** The system prompt that makes Claude *stay in character* while chatting. */
   systemPrompt: string;
   /** Prompt handed to the image generator to paint the character portrait. */

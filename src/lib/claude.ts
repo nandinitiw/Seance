@@ -165,7 +165,36 @@ const EMIT_PERSONA_TOOL: Anthropic.Tool = {
       voiceModel: {
         type: "string",
         enum: VOICE_MODELS,
-        description: "The Deepgram TTS voice id that best fits the character.",
+        description:
+          "The Deepgram TTS voice id whose timbre/gender best fits the character.",
+      },
+      voice: {
+        type: "object",
+        additionalProperties: false,
+        description: "How the character SOUNDS — tune each value to the personality.",
+        properties: {
+          rate: {
+            type: "number",
+            description:
+              "Speaking rate, 0.6 (slow drawl) to 1.6 (fast patter), 1 = normal. Fast for anxious_overachiever / valley_girl / gen_z_influencer / game_show_host / hyperactive_toddler; slow for zen_guru / grizzled_cowboy / deadpan_stoic / brooding_vampire / victorian_ghost.",
+          },
+          pitch: {
+            type: "number",
+            description:
+              "Pitch, 0.4 (deep) to 1.8 (squeaky), 1 = normal. Low for grumpy_elder / mob_boss / drill_sergeant / brooding_vampire / noir_detective; high for dramatic_diva / hyperactive_toddler / cheerful_cultist / valley_girl.",
+          },
+          volume: {
+            type: "number",
+            description:
+              "Loudness, 0.5 (hushed) to 1 (full). Hushed for conspiracy_theorist / victorian_ghost / zen_guru / brooding_vampire; loud for drill_sergeant / game_show_host / pirate_captain / motivational_coach.",
+          },
+          style: {
+            type: "string",
+            description:
+              "A few words describing the voice, e.g. 'gravelly, impatient, dry sarcasm'.",
+          },
+        },
+        required: ["rate", "pitch", "volume", "style"],
       },
       systemPrompt: {
         type: "string",
@@ -186,6 +215,7 @@ const EMIT_PERSONA_TOOL: Anthropic.Tool = {
       "name",
       "tagline",
       "openingLine",
+      "voice",
       "backstory",
       "traits",
       "voiceModel",
@@ -206,8 +236,14 @@ function systemPrompt(forceArchetype?: Archetype): string {
     "Be funny first, specific second, theatrical third. The humor comes from the gap between a mundane object and an outsized inner life — lean into what this SPECIFIC object endures (a stapler's thankless labor, a water bottle's abandonment, a charger's codependency).",
     pickLine,
     guide,
+    "Give it a VOICE that matches the personality: pick the voiceModel timbre/gender, then set rate (fast vs. slow), pitch (high vs. deep), and volume (loud vs. hushed) so the delivery fits — a drill_sergeant is loud, low and clipped; a victorian_ghost is hushed, slow and mournful; a hyperactive_toddler is fast, high and loud; a mob_boss is slow, deep and quiet-menacing. Add a short voice.style description.",
     "The character will speak aloud to a stranger, so give it a strong, playable, instantly-recognizable voice. The openingLine is the funny first thing it blurts out the moment it wakes up and notices a human — make it land. Then call the emit_persona tool with the result.",
   ].join("\n\n");
+}
+
+/** Coerce a model-supplied number into [lo, hi], falling back to `dflt`. */
+function clampNum(v: unknown, lo: number, hi: number, dflt: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt;
 }
 
 /** True if `v` is a non-empty trimmed string. */
@@ -246,6 +282,16 @@ function validatePersona(input: unknown): Persona | null {
     ? (p.voiceModel as string)
     : config.deepgramTtsModel;
 
+  // Clamp the LLM's voice settings into safe ranges; default anything missing.
+  const rawVoice = (typeof p.voice === "object" && p.voice ? p.voice : {}) as Record<string, unknown>;
+  const voice = {
+    model: voiceModel,
+    rate: clampNum(rawVoice.rate, 0.6, 1.6, 1),
+    pitch: clampNum(rawVoice.pitch, 0.4, 1.8, 1),
+    volume: clampNum(rawVoice.volume, 0.5, 1, 1),
+    style: filled(rawVoice.style) ? (rawVoice.style as string).trim() : "neutral",
+  };
+
   return {
     // Default to true only when explicitly true — anything non-boolean is treated
     // as "not recognized" so downstream errs toward the safe fallback portrait.
@@ -259,6 +305,7 @@ function validatePersona(input: unknown): Persona | null {
     backstory: (p.backstory as string).trim(),
     traits,
     voiceModel,
+    voice,
     systemPrompt: (p.systemPrompt as string).trim(),
     portraitPrompt: (p.portraitPrompt as string).trim(),
   };
@@ -411,6 +458,7 @@ function fallbackPersona(forceArchetype?: Archetype): Persona {
       "It does not know what it is, and frankly the question seems beneath it. It has been waiting. It will continue to wait. It is, by all accounts, fine.",
     traits: ["deadpan", "unbothered", "cryptic", "patient"],
     voiceModel: config.deepgramTtsModel,
+    voice: { model: config.deepgramTtsModel, rate: 0.92, pitch: 0.9, volume: 0.9, style: "flat, unbothered, deadpan" },
     systemPrompt:
       "You are The Object, a deadpan, unflappable spirit of total understatement. Treat every situation — however absurd — with flat, unhurried calm. Keep replies to 1-3 sentences since they are spoken aloud. Never break character.",
     portraitPrompt:
@@ -435,6 +483,7 @@ function mockPersona(forceArchetype?: Archetype): Persona {
       "I am but a stand-in, summoned without the Anthropic key that would grant me true personality. Set ANTHROPIC_API_KEY and I shall become whatever you point the camera at.",
     traits: ["patient", "self-aware", "hopeful"],
     voiceModel: config.deepgramTtsModel,
+    voice: { model: config.deepgramTtsModel, rate: 1, pitch: 1, volume: 1, style: "friendly, plain placeholder" },
     systemPrompt:
       "You are Mock, a friendly placeholder spirit. Keep replies to 1-2 sentences. Gently remind the user that adding ANTHROPIC_API_KEY will unlock real, object-specific personalities. Never break character.",
     portraitPrompt: "a glowing translucent ghost shaped like a question mark, friendly face",
