@@ -6,11 +6,11 @@ module.exports = {
     scheme: "seance",
     orientation: "portrait",
     ios: {
-      bundleIdentifier: "com.seance.app",
+      bundleIdentifier: "com.aishanisingh.seance",
       supportsTablet: false,
     },
     android: {
-      package: "com.seance.app",
+      package: "com.aishanisingh.seance",
     },
     plugins: [
       "expo-router",
