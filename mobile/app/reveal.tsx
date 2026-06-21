@@ -8,8 +8,9 @@
  */
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Image,
   Pressable,
@@ -190,7 +191,7 @@ function SpiritCard({ result }: { result: AwakenResponse }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function RevealScreen() {
-  const { personaJson } = useLocalSearchParams<{ personaJson: string }>();
+  const { personaJson, challengerJson } = useLocalSearchParams<{ personaJson: string; challengerJson?: string }>();
 
   let result: AwakenResponse | null = null;
   try {
@@ -198,6 +199,33 @@ export default function RevealScreen() {
   } catch {
     // handled below
   }
+
+  const [meetingLoading, setMeetingLoading] = useState(!!challengerJson);
+
+  // If this object was awakened as the second in a rival pairing,
+  // auto-navigate to the encounter screen immediately.
+  // Must be before any early return to satisfy Rules of Hooks.
+  useEffect(() => {
+    if (!challengerJson || !result) return;
+    let cancelled = false;
+    const objectKey2 = result.persona.objectKey;
+    (async () => {
+      try {
+        const challenger = JSON.parse(challengerJson) as AwakenResponse;
+        const { encounter } = await import("../src/api");
+        const data = await encounter(challenger.persona.objectKey, objectKey2);
+        if (cancelled) return;
+        router.replace({
+          pathname: "/encounter",
+          params: { encounterJson: JSON.stringify(data) },
+        });
+      } catch {
+        // If encounter fails, show the card normally so user can still séance
+        if (!cancelled) setMeetingLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   if (!result) {
     return (
@@ -213,6 +241,13 @@ export default function RevealScreen() {
     router.push({
       pathname: "/conversation",
       params: { personaJson },
+    });
+  };
+
+  const handleIntroduce = () => {
+    router.push({
+      pathname: "/",
+      params: { challengerJson: personaJson },
     });
   };
 
@@ -243,7 +278,7 @@ export default function RevealScreen() {
         {/* Spirit card */}
         <SpiritCard result={result} />
 
-        {/* CTA button */}
+        {/* Primary CTA */}
         <Pressable
           style={({ pressed }) => [ss.seanceBtn, pressed && { opacity: 0.85 }]}
           onPress={handleSeance}
@@ -251,11 +286,27 @@ export default function RevealScreen() {
           <Text style={ss.seanceBtnText}>Hold a séance →</Text>
         </Pressable>
 
+        {/* Introduce to another */}
+        <Pressable
+          style={({ pressed }) => [ss.introduceBtn, pressed && { opacity: 0.85 }]}
+          onPress={handleIntroduce}
+        >
+          <Text style={ss.introduceBtnText}>✦ introduce it to another</Text>
+        </Pressable>
+
         {/* Summon another link */}
         <Pressable onPress={handleSummonAnother} style={ss.anotherWrap}>
           <Text style={ss.anotherText}>summon another object</Text>
         </Pressable>
       </ScrollView>
+
+      {/* Overlay while the encounter API call is in flight */}
+      {meetingLoading && (
+        <View style={ss.meetingOverlay}>
+          <ActivityIndicator color="#34B7A0" size="large" />
+          <Text style={ss.meetingOverlayText}>arranging the meeting…</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -479,6 +530,22 @@ const ss = StyleSheet.create({
     fontSize: 22,
     color: "#F0E7D6",
   },
+  introduceBtn: {
+    width: 298,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#34B7A0",
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  introduceBtnText: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 12,
+    color: "#34B7A0",
+    letterSpacing: 1.5,
+  },
   anotherWrap: {
     paddingVertical: 8,
   },
@@ -488,5 +555,19 @@ const ss = StyleSheet.create({
     color: "#8a7c68",
     textDecorationLine: "underline",
     letterSpacing: 1,
+  },
+  meetingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(14,10,8,0.88)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+  },
+  meetingOverlayText: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 11,
+    color: "#34B7A0",
+    letterSpacing: 2,
+    fontStyle: "italic",
   },
 });

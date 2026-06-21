@@ -56,6 +56,50 @@ export interface ConverseInput {
  * One round-trip: Deepgram STT → Claude reply → Deepgram TTS. The server also
  * persists the exchange to memory, so the client does not post turns separately.
  */
+export interface EncounterLine {
+  speaker: "object1" | "object2";
+  text: string;
+}
+
+export interface EncounterResponse {
+  lines: EncounterLine[];
+  relationship: string;
+  persona1: Persona;
+  persona2: Persona;
+  portraitUrl1: string;
+  portraitUrl2: string;
+}
+
+export async function tts(text: string, voiceModel: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/tts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voiceModel }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data as { audio: string | null }).audio;
+  } catch {
+    return null;
+  }
+}
+
+export async function encounter(
+  objectKey1: string,
+  objectKey2: string,
+  dynamic?: string,
+): Promise<EncounterResponse> {
+  const res = await fetch(`${API_BASE}/api/encounter`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ objectKey1, objectKey2, ...(dynamic ? { dynamic } : {}) }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || `encounter ${res.status}`);
+  return data as EncounterResponse;
+}
+
 export async function converse({
   objectKey,
   audioUri,

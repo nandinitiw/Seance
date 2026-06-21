@@ -211,29 +211,52 @@ app.post("/api/turns", async (req, res) => {
 });
 
 /**
+ * POST /api/tts
+ * Body: { text: string, voiceModel?: string }
+ * Returns { audio: string | null } — base64 mp3, or null when Deepgram is off.
+ * Used by the encounter screen to speak pre-written lines in each persona's voice.
+ */
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text, voiceModel } = req.body as { text?: string; voiceModel?: string };
+    if (!text?.trim()) return res.status(400).json({ error: "text is required." });
+    const audio = await speak(text.trim(), voiceModel ?? config.deepgramTtsModel).catch(() => null);
+    res.json({ audio: audio ? audio.toString("base64") : null });
+  } catch (err) {
+    console.error("tts failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
  * POST /api/encounter
- * Body: { objectKey1: string, objectKey2: string }
+ * Body: { objectKey1, objectKey2, dynamic? }
  * Generates a scripted 6-line scene between two awakened objects.
- * Returns { lines: EncounterLine[], persona1: Persona, persona2: Persona }
+ * Returns { lines, relationship, persona1, persona2, portraitUrl1, portraitUrl2 }
  */
 app.post("/api/encounter", async (req, res) => {
-  const { objectKey1, objectKey2, dynamic } = req.body as { objectKey1: string; objectKey2: string; dynamic?: string };
-  if (!objectKey1 || !objectKey2) {
-    return res.status(400).json({ error: "objectKey1 and objectKey2 are required." });
-  }
-  const [state1, state2] = await Promise.all([loadState(objectKey1), loadState(objectKey2)]);
-  if (!state1) return res.status(404).json({ error: `Unknown object: ${objectKey1}` });
-  if (!state2) return res.status(404).json({ error: `Unknown object: ${objectKey2}` });
+  try {
+    const { objectKey1, objectKey2, dynamic } = req.body as { objectKey1: string; objectKey2: string; dynamic?: string };
+    if (!objectKey1 || !objectKey2) {
+      return res.status(400).json({ error: "objectKey1 and objectKey2 are required." });
+    }
+    const [state1, state2] = await Promise.all([loadState(objectKey1), loadState(objectKey2)]);
+    if (!state1) return res.status(404).json({ error: `Unknown object: ${objectKey1}` });
+    if (!state2) return res.status(404).json({ error: `Unknown object: ${objectKey2}` });
 
-  const { lines, relationship } = await generateEncounter(state1.persona, state2.persona, dynamic);
-  res.json({
-    lines,
-    relationship,
-    persona1: state1.persona,
-    persona2: state2.persona,
-    portraitUrl1: state1.portraitUrl,
-    portraitUrl2: state2.portraitUrl,
-  });
+    const { lines, relationship } = await generateEncounter(state1.persona, state2.persona, dynamic);
+    res.json({
+      lines,
+      relationship,
+      persona1: state1.persona,
+      persona2: state2.persona,
+      portraitUrl1: state1.portraitUrl,
+      portraitUrl2: state2.portraitUrl,
+    });
+  } catch (err) {
+    console.error("encounter failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 app.listen(config.port, () => {

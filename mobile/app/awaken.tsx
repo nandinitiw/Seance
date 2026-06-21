@@ -95,7 +95,7 @@ function LogLine({ text, index, visibleCount }: { text: string; index: number; v
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function AwakenScreen() {
-  const { imageDataUrl } = useLocalSearchParams<{ imageDataUrl: string }>();
+  const { imageDataUrl, challengerJson } = useLocalSearchParams<{ imageDataUrl: string; challengerJson?: string }>();
 
   const [visibleLogCount, setVisibleLogCount] = useState(0);
   const [statusText, setStatusText] = useState('channeling');
@@ -114,7 +114,10 @@ export default function AwakenScreen() {
       navigatedRef.current = true;
       router.replace({
         pathname: '/reveal',
-        params: { personaJson: JSON.stringify(resultRef.current) },
+        params: {
+          personaJson: JSON.stringify(resultRef.current),
+          ...(challengerJson ? { challengerJson } : {}),
+        },
       });
     }
   }
