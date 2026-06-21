@@ -377,8 +377,8 @@ function AvatarAura({ speaking }: { speaking: boolean }) {
 const av = StyleSheet.create({
   aura: {
     position: "absolute",
-    width: 60,
-    height: 60,
+    width: 84,
+    height: 84,
     backgroundColor: C.ember,
     // Shadow glow approximation
     shadowColor: C.ember,
@@ -512,7 +512,7 @@ function ConversationView({ result }: { result: AwakenResponse }) {
             speaking={agentSpeaking}
             style={cv.avatar}
             face
-            size={46}
+            size={72}
           />
         </View>
         <View style={cv.identity}>
@@ -697,17 +697,17 @@ const cv = StyleSheet.create({
     borderBottomColor: C.surface,
   },
   avatarWrap: {
-    width: 60,
-    height: 60,
+    width: 92,
+    height: 92,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
     overflow: 'visible',
   },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 11,
+    width: 72,
+    height: 72,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: C.amberBright,
     backgroundColor: C.surface,

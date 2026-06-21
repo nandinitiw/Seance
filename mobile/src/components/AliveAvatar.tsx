@@ -178,6 +178,8 @@ export function AliveAvatar({
 function Face({ speaking, size }: { speaking: boolean; size: number }) {
   const mouth = useRef(new Animated.Value(0)).current; // 0 closed → 1 open
   const blink = useRef(new Animated.Value(1)).current; // 1 open → ~0 shut (scaleY)
+  const gaze = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current; // pupils drift around
+  const brow = useRef(new Animated.Value(0)).current; // 0 rest → 1 raised (lifts while talking)
 
   // Talking: oscillate the mouth while speaking, snap shut when not.
   useEffect(() => {
@@ -216,6 +218,38 @@ function Face({ speaking, size }: { speaking: boolean; size: number }) {
     };
   }, [blink]);
 
+  // Pupils wander to random spots on a relaxed timer (saccade-like glances).
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const rx = size * 0.03;
+    const ry = size * 0.022;
+    const move = () => {
+      if (!alive) return;
+      Animated.timing(gaze, {
+        toValue: { x: (Math.random() - 0.5) * 2 * rx, y: (Math.random() - 0.5) * 2 * ry },
+        duration: 420,
+        useNativeDriver: true,
+      }).start(() => {
+        if (alive) timer = setTimeout(move, 900 + Math.random() * 2200);
+      });
+    };
+    timer = setTimeout(move, 600);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [gaze, size]);
+
+  // Eyebrows lift a touch while the spirit is speaking.
+  useEffect(() => {
+    Animated.timing(brow, {
+      toValue: speaking ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [speaking, brow]);
+
   // Feature dimensions scale with the avatar so it works at any size.
   const eyeW = Math.round(size * 0.17);
   const eyeH = Math.round(size * 0.23);
@@ -234,6 +268,7 @@ function Face({ speaking, size }: { speaking: boolean; size: number }) {
     borderColor: "rgba(28,24,19,0.35)",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden", // keep the drifting pupil inside the white of the eye
   };
   const pupilStyle: ViewStyle = {
     width: pupil,
@@ -241,10 +276,35 @@ function Face({ speaking, size }: { speaking: boolean; size: number }) {
     borderRadius: pupil / 2,
     backgroundColor: C.textDark,
   };
+  const browStyle: ViewStyle = {
+    width: eyeW,
+    height: Math.max(2, Math.round(size * 0.035)),
+    borderRadius: 4,
+    backgroundColor: C.textDark,
+  };
+  // Pupils share one gaze offset (both eyes look the same direction).
+  const pupilTransform = gaze.getTranslateTransform();
+  const browLift = brow.interpolate({ inputRange: [0, 1], outputRange: [0, -Math.round(size * 0.03)] });
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Eyes */}
+      {/* Eyebrows — lift while talking */}
+      <View
+        style={{
+          position: "absolute",
+          top: size * 0.2,
+          left: 0,
+          right: 0,
+          flexDirection: "row",
+          justifyContent: "center",
+          gap,
+        }}
+      >
+        <Animated.View style={[browStyle, { transform: [{ translateY: browLift }, { rotate: "8deg" }] }]} />
+        <Animated.View style={[browStyle, { transform: [{ translateY: browLift }, { rotate: "-8deg" }] }]} />
+      </View>
+
+      {/* Eyes — blink on a timer, pupils drift around */}
       <View
         style={{
           position: "absolute",
@@ -257,10 +317,10 @@ function Face({ speaking, size }: { speaking: boolean; size: number }) {
         }}
       >
         <Animated.View style={[eyeStyle, { transform: [{ scaleY: blink }] }]}>
-          <View style={pupilStyle} />
+          <Animated.View style={[pupilStyle, { transform: pupilTransform }]} />
         </Animated.View>
         <Animated.View style={[eyeStyle, { transform: [{ scaleY: blink }] }]}>
-          <View style={pupilStyle} />
+          <Animated.View style={[pupilStyle, { transform: pupilTransform }]} />
         </Animated.View>
       </View>
 
