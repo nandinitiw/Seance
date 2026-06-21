@@ -6,15 +6,22 @@ module.exports = {
     scheme: "seance",
     orientation: "portrait",
     ios: {
-      bundleIdentifier: "com.seance.app",
+      bundleIdentifier: "com.aishanisingh.seance",
       supportsTablet: false,
     },
     android: {
-      package: "com.seance.app",
+      package: "com.aishanisingh.seance",
     },
     plugins: [
       "expo-router",
       "expo-camera",
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "Séance needs your photo library to let you load an object.",
+          cameraPermission: "Séance needs your camera so you can photograph objects.",
+        },
+      ],
       [
         "react-native-deepgram",
         {
@@ -23,6 +30,7 @@ module.exports = {
         },
       ],
     ],
+    newArchEnabled: false,
     experiments: {
       typedRoutes: true,
     },
