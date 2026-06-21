@@ -351,8 +351,22 @@ function mockReply(persona: Persona, userText: string): string {
 export async function generateEncounter(
   persona1: Persona,
   persona2: Persona,
+  forcedDynamic?: string,
 ): Promise<EncounterResult> {
   if (!client) return mockEncounter(persona1, persona2);
+
+  const dynamicInstruction = forcedDynamic
+    ? `The dynamic is FIXED: "${forcedDynamic}". Play this out fully — don't choose a different one.`
+    : [
+        `First, decide what dynamic naturally emerges from THESE two specific personalities. Pick whichever is funniest and most surprising — it could be:`,
+        `- instant rivalry / mutual contempt`,
+        `- unexpected attraction or flirtation (played for absurdist comedy)`,
+        `- one-sided obsession while the other is indifferent`,
+        `- begrudging respect between two grumps`,
+        `- a mentor/student dynamic where one immediately tries to dominate`,
+        `- instant best friends who have found their soulmate`,
+        `Let the archetypes and backstories dictate which dynamic fits — don't default to conflict every time.`,
+      ].join("\n");
 
   const prompt = [
     `Two inanimate objects have just been placed next to each other and are aware of each other for the first time.`,
@@ -365,14 +379,7 @@ export async function generateEncounter(
     `Archetype: ${persona2.archetype}. Traits: ${persona2.traits.join(", ")}.`,
     `Backstory: ${persona2.backstory}`,
     ``,
-    `First, decide what dynamic naturally emerges from THESE two specific personalities. Pick whichever is funniest and most surprising — it could be:`,
-    `- instant rivalry / mutual contempt`,
-    `- unexpected attraction or flirtation (played for absurdist comedy)`,
-    `- one-sided obsession while the other is indifferent`,
-    `- begrudging respect between two grumps`,
-    `- a mentor/student dynamic where one immediately tries to dominate`,
-    `- instant best friends who have found their soulmate`,
-    `Let the archetypes and backstories dictate which dynamic fits — don't default to conflict every time.`,
+    dynamicInstruction,
     ``,
     `Write their encounter in exactly 6 lines:`,
     `- Line 1: object1's immediate gut reaction on seeing object2 (1 sentence, fully in their voice)`,

@@ -210,7 +210,7 @@ app.post("/api/turns", async (req, res) => {
  * Returns { lines: EncounterLine[], persona1: Persona, persona2: Persona }
  */
 app.post("/api/encounter", async (req, res) => {
-  const { objectKey1, objectKey2 } = req.body as { objectKey1: string; objectKey2: string };
+  const { objectKey1, objectKey2, dynamic } = req.body as { objectKey1: string; objectKey2: string; dynamic?: string };
   if (!objectKey1 || !objectKey2) {
     return res.status(400).json({ error: "objectKey1 and objectKey2 are required." });
   }
@@ -218,7 +218,7 @@ app.post("/api/encounter", async (req, res) => {
   if (!state1) return res.status(404).json({ error: `Unknown object: ${objectKey1}` });
   if (!state2) return res.status(404).json({ error: `Unknown object: ${objectKey2}` });
 
-  const { lines, relationship } = await generateEncounter(state1.persona, state2.persona);
+  const { lines, relationship } = await generateEncounter(state1.persona, state2.persona, dynamic);
   res.json({
     lines,
     relationship,
