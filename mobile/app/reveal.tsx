@@ -372,13 +372,6 @@ export default function RevealScreen() {
     router.push("/");
   };
 
-  const handleIntroduce = () => {
-    router.push({
-      pathname: "/",
-      params: { challengerJson: personaJson },
-    });
-  };
-
   const handleSummonAnother = () => {
     router.replace("/");
   };
