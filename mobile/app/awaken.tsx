@@ -23,7 +23,8 @@ import { C, FONTS, SP } from '../src/theme';
 
 // ── Log lines ─────────────────────────────────────────────────────────────────
 
-const LOG_LINES = [
+// First wave — appears quickly as the call kicks off (~3s total)
+const LOG_LINES_INITIAL = [
   'vessel identified',
   'reading its aura',
   'excavating memories',
@@ -31,11 +32,27 @@ const LOG_LINES = [
   'it stirs…',
 ];
 
+// Second wave — cycles in one at a time while the API is still working.
+// Kept atmospheric so a slow call feels intentional, not broken.
+const LOG_LINES_WAITING = [
+  'consulting the ether',
+  'negotiating with shadows',
+  'weaving the spirit cloth',
+  'coaxing it forward',
+  'almost there…',
+  'the veil resists',
+  'pulling harder',
+  'binding the final thread',
+];
+
 // Minimum display time before navigating away (ms)
 const MIN_DISPLAY_MS = 3500;
 
 // How long each log line reveal is staggered (ms)
 const LOG_STAGGER_MS = 580;
+
+// How long between waiting lines after the initial batch finishes (ms)
+const WAITING_LINE_INTERVAL_MS = 3200;
 
 // ── Grain overlay ─────────────────────────────────────────────────────────────
 
@@ -99,6 +116,7 @@ function LogLine({ text, index, visibleCount }: { text: string; index: number; v
 export default function AwakenScreen() {
   const imageDataUrl = sessionStore.getImage();
 
+  const [logLines, setLogLines] = useState<string[]>(LOG_LINES_INITIAL);
   const [visibleLogCount, setVisibleLogCount] = useState(0);
   const [statusText, setStatusText] = useState('channeling');
   const [progressPct, setProgressPct] = useState(0);
@@ -155,12 +173,24 @@ export default function AwakenScreen() {
     );
     breathe.start();
 
-    // Log lines appear one by one
+    // Initial log lines appear one by one
     const timers: ReturnType<typeof setTimeout>[] = [];
-    LOG_LINES.forEach((_, i) => {
+    LOG_LINES_INITIAL.forEach((_, i) => {
       const t = setTimeout(() => {
         setVisibleLogCount(i + 1);
       }, 400 + i * LOG_STAGGER_MS);
+      timers.push(t);
+    });
+
+    // After initial batch, keep adding waiting lines every few seconds until
+    // the API returns. Each new line replaces the list so only the latest
+    // window of lines is shown (avoids an infinitely growing list).
+    const initialBatchEnd = 400 + (LOG_LINES_INITIAL.length - 1) * LOG_STAGGER_MS + 800;
+    LOG_LINES_WAITING.forEach((line, i) => {
+      const t = setTimeout(() => {
+        setLogLines([...LOG_LINES_INITIAL, ...LOG_LINES_WAITING.slice(0, i + 1)]);
+        setVisibleLogCount(LOG_LINES_INITIAL.length + i + 1);
+      }, initialBatchEnd + i * WAITING_LINE_INTERVAL_MS);
       timers.push(t);
     });
 
@@ -311,9 +341,9 @@ export default function AwakenScreen() {
 
         {/* Log lines */}
         <View style={styles.logContainer}>
-          {LOG_LINES.map((line, i) => (
+          {logLines.map((line, i) => (
             <LogLine
-              key={line}
+              key={`${i}-${line}`}
               text={line}
               index={i}
               visibleCount={visibleLogCount}

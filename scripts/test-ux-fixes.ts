@@ -162,6 +162,25 @@ assert(encounterSource.includes("sessionStore.getEncounter()"), "reads from sess
 assert(!revealSource.includes("encounterJson: JSON.stringify"), "reveal.tsx no longer serializes encounter into nav params");
 assert(revealSource.includes("sessionStore.setEncounter(data)"), "reveal.tsx calls sessionStore.setEncounter");
 
+// ── Section 7: Awaken progress — waiting lines ────────────────────────────
+
+console.log("\n" + "─".repeat(72));
+console.log("7 · Awaken progress — waiting lines keep appearing during long API calls");
+console.log("─".repeat(72));
+
+const awakenSource = readFileSync("mobile/app/awaken.tsx", "utf8");
+
+assert(awakenSource.includes("LOG_LINES_WAITING"), "LOG_LINES_WAITING array defined");
+assert(awakenSource.includes("LOG_LINES_INITIAL"), "LOG_LINES_INITIAL array defined");
+assert(awakenSource.includes("WAITING_LINE_INTERVAL_MS"), "WAITING_LINE_INTERVAL_MS constant defined");
+assert(awakenSource.includes("consulting the ether"), "waiting lines contain atmospheric copy");
+assert(awakenSource.includes("setLogLines("), "logLines state is updated dynamically");
+// Waiting lines fire after the initial batch
+assert(
+  awakenSource.includes("initialBatchEnd + i * WAITING_LINE_INTERVAL_MS"),
+  "waiting lines staggered after initial batch ends"
+);
+
 // ── Summary ───────────────────────────────────────────────────────────────
 
 console.log("\n" + "─".repeat(72));
