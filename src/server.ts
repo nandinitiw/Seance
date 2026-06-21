@@ -218,9 +218,10 @@ app.post("/api/encounter", async (req, res) => {
   if (!state1) return res.status(404).json({ error: `Unknown object: ${objectKey1}` });
   if (!state2) return res.status(404).json({ error: `Unknown object: ${objectKey2}` });
 
-  const lines = await generateEncounter(state1.persona, state2.persona);
+  const { lines, relationship } = await generateEncounter(state1.persona, state2.persona);
   res.json({
     lines,
+    relationship,
     persona1: state1.persona,
     persona2: state2.persona,
     portraitUrl1: state1.portraitUrl,

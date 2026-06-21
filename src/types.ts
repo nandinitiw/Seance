@@ -55,6 +55,13 @@ export interface EncounterLine {
   text: string;
 }
 
+/** The result of a two-object encounter. */
+export interface EncounterResult {
+  lines: EncounterLine[];
+  /** Short punchy verdict on the dynamic, e.g. "Rivals", "Star-crossed", "Complicated". */
+  relationship: string;
+}
+
 /** Everything we persist per awakened object. */
 export interface SessionState {
   persona: Persona;

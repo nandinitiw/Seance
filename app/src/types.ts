@@ -49,6 +49,7 @@ export interface EncounterLine {
 /** Response from POST /api/encounter. */
 export interface EncounterResponse {
   lines: EncounterLine[];
+  relationship: string;
   persona1: Persona;
   persona2: Persona;
   portraitUrl1: string;

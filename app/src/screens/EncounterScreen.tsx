@@ -24,7 +24,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Encounter">;
 const PORTRAIT_SIZE = 130;
 
 export default function EncounterScreen({ route, navigation }: Props) {
-  const { lines, persona1, persona2, portraitUrl1, portraitUrl2 } = route.params;
+  const { lines, relationship, persona1, persona2, portraitUrl1, portraitUrl2 } = route.params;
 
   const [currentLine, setCurrentLine] = useState(-1); // -1 = not started
   const [playing, setPlaying] = useState(false);
@@ -103,6 +103,9 @@ export default function EncounterScreen({ route, navigation }: Props) {
     playLine(0);
   }, [playLine, glow1, glow2]);
 
+  // Auto-start once startScene is stable (after first render).
+  useEffect(() => { startScene(); }, [startScene]);
+
   const uri1 = resolveMediaUrl(portraitUrl1);
   const uri2 = resolveMediaUrl(portraitUrl2);
 
@@ -113,7 +116,7 @@ export default function EncounterScreen({ route, navigation }: Props) {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        <Text style={styles.heading}>Their Encounter</Text>
+        <Text style={styles.heading}>The Meeting</Text>
 
         {/* Side-by-side portraits */}
         <View style={styles.portraits}>
@@ -152,18 +155,14 @@ export default function EncounterScreen({ route, navigation }: Props) {
           })}
         </View>
 
-        {/* Actions */}
-        {!playing && !done && (
-          <Pressable
-            style={({ pressed }) => [styles.primary, pressed && styles.primaryPressed]}
-            onPress={startScene}
-          >
-            <Text style={styles.primaryText}>▶  Begin the encounter</Text>
-          </Pressable>
-        )}
-
+        {/* Verdict card — revealed when the scene finishes */}
         {done && (
           <>
+            <View style={styles.verdict}>
+              <Text style={styles.verdictLabel}>STATUS</Text>
+              <Text style={styles.verdictText}>{relationship}</Text>
+            </View>
+
             <Pressable
               style={({ pressed }) => [styles.primary, pressed && styles.primaryPressed]}
               onPress={startScene}
@@ -253,6 +252,31 @@ const styles = StyleSheet.create({
   },
   bubbleLabelRight: { textAlign: "right" },
   bubbleText: { ...font.body, color: colors.text, lineHeight: 20 },
+  verdict: {
+    alignSelf: "stretch",
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.spirit,
+    backgroundColor: "rgba(125,240,224,0.07)",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  verdictLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: colors.spiritDim,
+    textTransform: "uppercase",
+  },
+  verdictText: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: colors.spirit,
+    textAlign: "center",
+    letterSpacing: 0.5,
+  },
   primary: {
     alignSelf: "stretch",
     marginTop: spacing.md,

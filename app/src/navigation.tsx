@@ -17,7 +17,7 @@ export type RootStackParamList = {
   Awakening: { imageDataUrl: string; challengerKey?: string };
   Reveal: { result: AwakenResponse; imageDataUrl: string; challengerKey?: string };
   Conversation: { result: AwakenResponse };
-  Encounter: { lines: EncounterLine[]; persona1: Persona; persona2: Persona; portraitUrl1: string; portraitUrl2: string };
+  Encounter: { lines: EncounterLine[]; relationship: string; persona1: Persona; persona2: Persona; portraitUrl1: string; portraitUrl2: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

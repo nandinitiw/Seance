@@ -81,6 +81,7 @@ export default function RevealScreen({ route, navigation }: Props) {
       const data = await encounter(challengerObjectKey, persona.objectKey);
       navigation.replace("Encounter", {
         lines: data.lines,
+        relationship: data.relationship,
         persona1: data.persona1,
         persona2: data.persona2,
         portraitUrl1: data.portraitUrl1,
@@ -183,7 +184,7 @@ export default function RevealScreen({ route, navigation }: Props) {
           disabled={encountering}
         >
           <Text style={styles.rivalText}>
-            {encountering ? "Setting up the encounter…" : "⚔  Find it a rival"}
+            {encountering ? "Summoning the encounter…" : "✨  Introduce it to another"}
           </Text>
         </Pressable>
 

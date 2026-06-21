@@ -159,7 +159,7 @@ export default function CaptureScreen({ navigation, route }: Props) {
         <Text style={styles.title}>🔮 Séance</Text>
         {challengerLabel ? (
           <View style={styles.rivalBanner}>
-            <Text style={styles.rivalBannerText}>⚔  Finding a rival for {challengerLabel}</Text>
+            <Text style={styles.rivalBannerText}>✨  Introducing {challengerLabel} to…</Text>
           </View>
         ) : (
           <Text style={styles.subtitle}>Point at any object. Wake the spirit inside.</Text>
@@ -177,7 +177,7 @@ export default function CaptureScreen({ navigation, route }: Props) {
 
       <View style={styles.controls}>
         <PrimaryButton
-          label={busy ? "Channeling…" : challengerLabel ? "Awaken the rival" : "Awaken what I'm pointing at"}
+          label={busy ? "Channeling…" : challengerLabel ? "Awaken this one" : "Awaken what I'm pointing at"}
           onPress={handleCapture}
           disabled={busy}
           loading={busy}
