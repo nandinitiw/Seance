@@ -3,6 +3,8 @@ import type { Persona, Turn } from "./types";
 
 export interface AwakenResponse {
   persona: Persona;
+  /** All ranked persona options (3 for new objects, 1 for returning). */
+  personas: Persona[];
   portraitUrl: string;
   encounters: number;
   returning: boolean;
@@ -68,6 +70,14 @@ export interface EncounterResponse {
   persona2: Persona;
   portraitUrl1: string;
   portraitUrl2: string;
+}
+
+export async function selectPersona(objectKey: string, persona: Persona): Promise<void> {
+  await fetch(`${API_BASE}/api/select-persona`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ objectKey, persona }),
+  });
 }
 
 export async function tts(text: string, voiceModel: string): Promise<string | null> {

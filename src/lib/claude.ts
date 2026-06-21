@@ -41,6 +41,106 @@ const VOICE_MODELS = [
 // tool use is far more reliable than asking for JSON and parsing prose — the
 // model literally cannot emit markdown fences or preamble, only schema-shaped
 // input. We still validate defensively (see validatePersona).
+
+const PERSONA_PROPERTIES = {
+  objectRecognized: {
+    type: "boolean",
+    description:
+      "true ONLY if you can confidently identify a specific, real physical object in the photo. Set false if the image is blurry/dark, shows no clear single object, or is dominated by a person or scene rather than a thing. When false, still invent a fun generic persona.",
+  },
+  archetype: {
+    type: "string",
+    enum: ARCHETYPE_KEYS,
+    description: "The best-fit comedic archetype for this object.",
+  },
+  objectKey: {
+    type: "string",
+    description:
+      "lowercase-hyphenated slug for this KIND of object, e.g. 'red-stapler'. The same kind of object must always yield the same key so memory can find it.",
+  },
+  object: {
+    type: "string",
+    description: "Plain identification, e.g. 'a red stapler'.",
+  },
+  name: {
+    type: "string",
+    description: "A characterful, funny name for the persona.",
+  },
+  tagline: {
+    type: "string",
+    description: "One witty line shown under the portrait.",
+  },
+  openingLine: {
+    type: "string",
+    description:
+      "The character's first spoken line, fully in voice — the funny thing it says the instant it wakes up and notices a human. One or two sentences.",
+  },
+  backstory: {
+    type: "string",
+    description: "2-3 vivid, funny sentences of who this object secretly is.",
+  },
+  traits: {
+    type: "array",
+    items: { type: "string" },
+    description: "3-5 personality adjectives that fit the archetype.",
+  },
+  voiceModel: {
+    type: "string",
+    enum: VOICE_MODELS,
+    description: "The Deepgram TTS voice id that best fits the character.",
+  },
+  systemPrompt: {
+    type: "string",
+    description:
+      "A second-person system prompt that makes an AI fully embody this character in a SPOKEN conversation: voice, quirks, opinions. It MUST instruct keeping replies to 1-3 sentences (they're spoken aloud) and to never break character.",
+  },
+  portraitPrompt: {
+    type: "string",
+    description:
+      "An image-gen prompt to paint this object as an anthropomorphic character portrait, matching its real colors/shape, with an expressive face and dramatic lighting.",
+  },
+} as const;
+
+const PERSONA_REQUIRED = [
+  "objectRecognized",
+  "archetype",
+  "objectKey",
+  "object",
+  "name",
+  "tagline",
+  "openingLine",
+  "backstory",
+  "traits",
+  "voiceModel",
+  "systemPrompt",
+  "portraitPrompt",
+];
+
+const EMIT_PERSONAS_TOOL: Anthropic.Tool = {
+  name: "emit_personas",
+  description:
+    "Emit three distinct, ranked personas living inside the photographed object. Each must have a genuinely different archetype, name, and personality angle. Rank them best-fit first.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      personas: {
+        type: "array",
+        minItems: 3,
+        maxItems: 3,
+        description: "Exactly 3 personas, ranked best-fit first.",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: PERSONA_PROPERTIES,
+          required: PERSONA_REQUIRED,
+        },
+      },
+    },
+    required: ["personas"],
+  },
+};
+
 const EMIT_PERSONA_TOOL: Anthropic.Tool = {
   name: "emit_persona",
   description:
@@ -123,16 +223,24 @@ const EMIT_PERSONA_TOOL: Anthropic.Tool = {
   },
 };
 
-function systemPrompt(): string {
+function systemPrompt(multi = false): string {
   const guide = ARCHETYPE_KEYS.map((k) => `- ${k}: ${ARCHETYPES[k]}`).join("\n");
-  return [
+  const base = [
     "You are the spirit medium behind Séance. You look at an everyday object and channel the larger-than-life character secretly living inside it.",
     "First, identify the object. Set objectRecognized true ONLY when you can confidently name a specific physical object. If the photo is blurry, empty, or dominated by a person or scene rather than a thing, set objectRecognized false — but STILL invent a fun persona (use a vague objectKey/object and let the character riff on its own mysteriousness).",
     "Be funny first, specific second, theatrical third. The humor comes from the gap between a mundane object and an outsized inner life — lean into what this SPECIFIC object endures (a stapler's thankless labor, a water bottle's abandonment, a charger's codependency).",
-    "Pick the single best-fit archetype and COMMIT to its voice completely — let it color the name, tagline, backstory, traits, the openingLine, and especially the systemPrompt:",
+    "Archetypes:",
     guide,
-    "The character will speak aloud to a stranger, so give it a strong, playable, instantly-recognizable voice. The openingLine is the funny first thing it blurts out the moment it wakes up and notices a human — make it land. Then call the emit_persona tool with the result.",
-  ].join("\n\n");
+    "The character will speak aloud to a stranger, so give it a strong, playable, instantly-recognizable voice. The openingLine is the funny first thing it blurts out the moment it wakes up and notices a human — make it land.",
+  ];
+  if (multi) {
+    base.push(
+      "Generate EXACTLY 3 distinct personas for this object — each must use a DIFFERENT archetype and take a genuinely different angle on the object's inner life. Rank them best-fit first (the one you think is funniest and most true to the object's nature). Call emit_personas with all three.",
+    );
+  } else {
+    base.push("Pick the single best-fit archetype and COMMIT to its voice completely. Then call emit_persona with the result.");
+  }
+  return base.join("\n\n");
 }
 
 /** True if `v` is a non-empty trimmed string. */
@@ -247,6 +355,50 @@ export async function awaken(image: ImageInput): Promise<Persona> {
     // Network/API failure must never break /api/awaken — degrade to a canned persona.
     console.error("awaken: Anthropic call failed — using fallback persona:", err);
     return fallbackPersona();
+  }
+}
+
+/**
+ * Generate 3 ranked personas for the same object. Ranked best-fit first.
+ * Falls back to three variations on fallbackPersona if Claude fails.
+ */
+export async function awakenAll(image: ImageInput): Promise<Persona[]> {
+  if (!client) return [mockPersona(), mockPersona(), mockPersona()];
+
+  try {
+    const message = await client.messages.create({
+      model: config.anthropicVisionModel,
+      max_tokens: 6144,
+      system: systemPrompt(true),
+      tools: [EMIT_PERSONAS_TOOL],
+      tool_choice: { type: "tool", name: EMIT_PERSONAS_TOOL.name },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: imageSource(image) },
+            {
+              type: "text",
+              text: "Channel 3 distinct spirits inside this object, ranked best-fit first. Call emit_personas.",
+            },
+          ],
+        },
+      ],
+    });
+
+    const toolUse = message.content.find((b) => b.type === "tool_use");
+    if (!toolUse || toolUse.type !== "tool_use") {
+      console.warn("awakenAll: no tool_use in response, falling back");
+      return [fallbackPersona()];
+    }
+    const raw = (toolUse.input as { personas?: unknown }).personas;
+    if (!Array.isArray(raw)) return [fallbackPersona()];
+    const personas = raw.map(validatePersona).filter((p): p is Persona => p !== null);
+    if (personas.length === 0) return [fallbackPersona()];
+    return personas;
+  } catch (err) {
+    console.error("awakenAll: Anthropic call failed — using fallback persona:", err);
+    return [fallbackPersona()];
   }
 }
 

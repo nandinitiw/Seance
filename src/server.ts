@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { config, caps, logCapabilities } from "./config.js";
-import { awaken, reply, generateEncounter, type ImageInput } from "./lib/claude.js";
+import { awaken, awakenAll, reply, generateEncounter, type ImageInput } from "./lib/claude.js";
 import { paintPortrait, generateMysteryPortrait } from "./lib/imagegen.js";
 import { transcribe, speak } from "./lib/deepgram.js";
 import { loadState, saveState } from "./lib/memory.js";
@@ -38,30 +38,33 @@ app.post("/api/awaken", async (req, res) => {
       return res.status(400).json({ error: "Expected { image: dataURL | https URL }" });
     }
 
-    // 1. Channel the character from the photo.
-    const persona = await awaken(input);
-    persona.objectKey = normalizeKey(persona.objectKey);
-    // Optional override: a client may pin a stable objectKey so the same
-    // rehearsed object reliably "remembers you" across scans, even if Claude's
-    // freeform slug drifts between photos. Omitted by default → unchanged.
+    // 1. Channel 3 ranked personas from the photo.
+    const personas = await awakenAll(input);
+    for (const p of personas) {
+      p.objectKey = normalizeKey(p.objectKey);
+    }
+    // Optional override: pin a stable objectKey so the same rehearsed object
+    // reliably "remembers you" across scans.
     if (typeof req.body.objectKey === "string" && req.body.objectKey.trim()) {
-      persona.objectKey = normalizeKey(req.body.objectKey);
+      const key = normalizeKey(req.body.objectKey);
+      for (const p of personas) p.objectKey = key;
     }
 
-    // 2. Has this object been awakened before? (memory / the "remembers you" beat)
-    const prior = await loadState(persona.objectKey);
+    // 2. Has this object been awakened before?
+    // awakenAll always returns ≥1 persona (falls back to fallbackPersona on error).
+    const primaryPersona = personas[0]!;
+    const prior = await loadState(primaryPersona.objectKey);
 
-    // 3. Paint the portrait (skip if we already have one for this object).
-    //    Unrecognized objects get a Pollinations mystery creature instead of
-    //    the normal image-gen path.
+    // 3. Paint the portrait once (skip if returning; use first persona's prompts).
     const portraitUrl =
       prior?.portraitUrl ??
-      (persona.objectRecognized
-        ? await paintPortrait(persona, image)
+      (primaryPersona.objectRecognized
+        ? await paintPortrait(primaryPersona, image)
         : await generateMysteryPortrait(image));
 
+    // Save the top-ranked persona as the active one.
     const state: SessionState = {
-      persona: prior?.persona ?? persona,
+      persona: prior?.persona ?? primaryPersona,
       portraitUrl,
       history: prior?.history ?? [],
       encounters: (prior?.encounters ?? 0) + 1,
@@ -70,6 +73,9 @@ app.post("/api/awaken", async (req, res) => {
 
     res.json({
       persona: state.persona,
+      // All 3 ranked personas so the client can offer a picker.
+      // Returning objects get only their saved persona (they already have history).
+      personas: prior ? [state.persona] : personas,
       portraitUrl: state.portraitUrl,
       encounters: state.encounters,
       returning: Boolean(prior),
@@ -77,6 +83,30 @@ app.post("/api/awaken", async (req, res) => {
     });
   } catch (err) {
     console.error("awaken failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
+ * POST /api/select-persona
+ * Body: { objectKey, persona: Persona }
+ * Swaps the active persona for an awakened object without resetting history.
+ * Called when the user picks one of the alt personas from the reveal screen picker.
+ */
+app.post("/api/select-persona", async (req, res) => {
+  try {
+    const { objectKey, persona } = req.body as { objectKey?: string; persona?: unknown };
+    if (!objectKey || !persona) {
+      return res.status(400).json({ error: "objectKey and persona are required." });
+    }
+    const key = normalizeKey(objectKey);
+    const state = await loadState(key);
+    if (!state) return res.status(404).json({ error: "Unknown object — awaken it first." });
+    state.persona = persona as typeof state.persona;
+    await saveState(state);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("select-persona failed:", err);
     res.status(500).json({ error: String(err) });
   }
 });

@@ -7,6 +7,7 @@
  * Shows the awakened spirit's card with an entrance animation,
  * then lets the user begin the séance or summon another object.
  */
+import { Audio } from "expo-av";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,6 +24,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Defs, Pattern, Circle, Rect } from "react-native-svg";
 import type { AwakenResponse } from "../src/api";
+import type { Persona } from "../src/types";
 import { sessionStore } from "../src/sessionStore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -190,22 +192,102 @@ function SpiritCard({ result }: { result: AwakenResponse }) {
   );
 }
 
+// ── Persona picker chip ───────────────────────────────────────────────────────
+
+function AltPersonaChip({
+  persona,
+  onPress,
+  speaking,
+}: {
+  persona: Persona;
+  onPress: () => Promise<void>;
+  speaking: boolean;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [pk.chip, speaking && pk.chipActive, pressed && { opacity: 0.7 }]}
+      onPress={onPress}
+    >
+      {speaking && <View style={pk.speakingDot} />}
+      <Text style={[pk.chipName, speaking && pk.chipNameActive]} numberOfLines={1}>
+        {persona.name}
+      </Text>
+      <Text style={pk.chipArchetype}>{persona.archetype.replace(/_/g, " ")}</Text>
+    </Pressable>
+  );
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function RevealScreen() {
   const result = sessionStore.getResult();
   const challengerResult = sessionStore.getChallenger();
 
-  // Idempotent navigation — reset on focus so returning from the conversation
-  // (router.back) re-arms the button, but a double-tap can't push twice.
+  // Index into result.personas for whichever spirit is currently showing.
+  const [activePersonaIdx, setActivePersonaIdx] = useState(0);
+  // Fades the picker in after the opening line finishes playing.
+  const pickerOpacity = useRef(new Animated.Value(0)).current;
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => { return () => { mounted.current = false; soundRef.current?.unloadAsync().catch(() => {}); }; }, []);
+
   const navLock = useRef(false);
   useFocusEffect(useCallback(() => { navLock.current = false; }, []));
 
   const [meetingLoading, setMeetingLoading] = useState(!!challengerResult);
 
-  // If this object was awakened as the second in a rival pairing,
-  // auto-navigate to the encounter screen immediately.
-  // Must be before any early return to satisfy Rules of Hooks.
+  // Auto-TTS the active persona's opening line.
+  const speakOpening = useCallback(async (persona: Persona, idx: number) => {
+    if (!mounted.current) return;
+    setSpeakingIdx(idx);
+    try {
+      soundRef.current?.stopAsync().catch(() => {});
+      soundRef.current?.unloadAsync().catch(() => {});
+      soundRef.current = null;
+
+      const { tts } = await import("../src/api");
+      const audio = await tts(persona.openingLine, persona.voiceModel);
+      if (!mounted.current) return;
+
+      if (audio) {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: `data:audio/mp3;base64,${audio}` },
+          { shouldPlay: true },
+        );
+        soundRef.current = sound;
+        await new Promise<void>((resolve) => {
+          sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.isLoaded && status.didJustFinish) {
+              sound.unloadAsync().catch(() => {});
+              resolve();
+            }
+          });
+        });
+      } else {
+        await new Promise((r) => setTimeout(r, Math.max(2000, persona.openingLine.length * 50)));
+      }
+    } catch {
+      // TTS failure is silent — the text is still visible on the card
+    }
+    if (!mounted.current) return;
+    setSpeakingIdx(null);
+    // Reveal picker after the first opening line finishes
+    setPickerVisible(true);
+    Animated.timing(pickerOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+  }, [pickerOpacity]);
+
+  // Play opening line on mount (skip if in introduce mode — we navigate away immediately)
+  useEffect(() => {
+    if (challengerResult || !result) return;
+    const persona = result.personas?.[0] ?? result.persona;
+    void speakOpening(persona, 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Encounter auto-navigation when in introduce mode.
   useEffect(() => {
     if (!challengerResult || !result) return;
     let cancelled = false;
@@ -214,12 +296,8 @@ export default function RevealScreen() {
         const { encounter } = await import("../src/api");
         const data = await encounter(challengerResult.persona.objectKey, result.persona.objectKey);
         if (cancelled) return;
-        router.replace({
-          pathname: "/encounter",
-          params: { encounterJson: JSON.stringify(data) },
-        });
+        router.replace({ pathname: "/encounter", params: { encounterJson: JSON.stringify(data) } });
       } catch {
-        // If encounter fails, show the card normally so user can still séance
         if (!cancelled) setMeetingLoading(false);
       }
     })();
@@ -248,20 +326,42 @@ export default function RevealScreen() {
     );
   }
 
+  const allPersonas = result.personas?.length ? result.personas : [result.persona];
+  const activePersona = allPersonas[activePersonaIdx] ?? result.persona;
+  // Show the card with whichever persona is active (swap the name/tagline/traits
+  // while keeping the portrait and encounter count from the original result).
+  const displayResult: AwakenResponse = { ...result, persona: activePersona };
+
+  const handlePickPersona = async (idx: number) => {
+    if (idx === activePersonaIdx || speakingIdx !== null) return;
+    setActivePersonaIdx(idx);
+    const persona = allPersonas[idx];
+    // Persist the selection so conversation uses the right persona
+    const { selectPersona } = await import("../src/api");
+    selectPersona(persona.objectKey, persona).catch(() => {});
+    // Update the sessionStore result so conversation reads the right persona
+    sessionStore.setResult({ ...result, persona });
+    void speakOpening(persona, idx);
+  };
+
   const handleSeance = () => {
-    if (navLock.current) return; // ignore double-taps → no duplicate audio sessions
+    if (navLock.current) return;
     navLock.current = true;
-    router.push("/conversation"); // result handed off via the store, not params
+    // Make sure the store has the currently-selected persona before navigating
+    sessionStore.setResult({ ...result, persona: activePersona });
+    router.push("/conversation");
   };
 
   const handleIntroduce = () => {
-    sessionStore.setChallenger(result);
+    sessionStore.setChallenger({ ...result, persona: activePersona });
     router.push("/");
   };
 
   const handleSummonAnother = () => {
     router.replace("/");
   };
+
+  const altPersonas = allPersonas.filter((_, i) => i !== activePersonaIdx);
 
   return (
     <SafeAreaView style={ss.safe} edges={["top", "bottom"]}>
@@ -280,11 +380,34 @@ export default function RevealScreen() {
         contentContainerStyle={ss.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top label */}
-        <Text style={ss.topLabel}>✦ the spirit has taken form ✦</Text>
+        {/* Top label — shows "speaking" state */}
+        <Text style={ss.topLabel}>
+          {speakingIdx !== null ? "✦ the spirit speaks ✦" : "✦ the spirit has taken form ✦"}
+        </Text>
 
-        {/* Spirit card */}
-        <SpiritCard result={result} />
+        {/* Spirit card �� swaps persona on pick */}
+        <SpiritCard result={displayResult} />
+
+        {/* Persona picker — fades in after opening line finishes */}
+        {pickerVisible && altPersonas.length > 0 && (
+          <Animated.View style={[pk.wrap, { opacity: pickerOpacity }]}>
+            <Text style={pk.label}>choose a different spirit</Text>
+            <View style={pk.row}>
+              {allPersonas.map((p, i) => {
+                if (i === activePersonaIdx) return null;
+                const originalIdx = allPersonas.indexOf(p);
+                return (
+                  <AltPersonaChip
+                    key={p.name}
+                    persona={p}
+                    onPress={() => handlePickPersona(originalIdx)}
+                    speaking={speakingIdx === originalIdx}
+                  />
+                );
+              })}
+            </View>
+          </Animated.View>
+        )}
 
         {/* Primary CTA */}
         <Pressable
@@ -318,6 +441,69 @@ export default function RevealScreen() {
     </SafeAreaView>
   );
 }
+
+// ── Picker styles ─────────────────────────────────────────────────────────────
+
+const pk = StyleSheet.create({
+  wrap: {
+    width: 298,
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  label: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 9,
+    color: "#8a7c68",
+    letterSpacing: 2,
+    marginBottom: 10,
+    textTransform: "uppercase",
+  },
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  chip: {
+    flex: 1,
+    backgroundColor: "rgba(242,233,214,0.06)",
+    borderWidth: 0.75,
+    borderColor: "#4A3F33",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    gap: 4,
+    position: "relative",
+  },
+  chipActive: {
+    borderColor: "#D6A94B",
+    backgroundColor: "rgba(214,169,75,0.1)",
+  },
+  speakingDot: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#D6A94B",
+  },
+  chipName: {
+    fontFamily: "InstrumentSerif_400Regular",
+    fontSize: 14,
+    color: "#B8A98C",
+    textAlign: "center",
+  },
+  chipNameActive: {
+    color: "#F2E9D6",
+  },
+  chipArchetype: {
+    fontFamily: "DMMono_400Regular",
+    fontSize: 8,
+    color: "#5A4F42",
+    letterSpacing: 1,
+    textAlign: "center",
+  },
+});
 
 // ── Card styles ───────────────────────────────────────────────────────────────
 

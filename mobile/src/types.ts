@@ -1,10 +1,19 @@
 // Mirrored from ../src/types.ts — keep in sync with the backend contract.
 
+export type Archetype =
+  | "grumpy_elder"
+  | "dramatic_diva"
+  | "deadpan_stoic"
+  | "anxious_overachiever";
+
 export interface Persona {
+  objectRecognized: boolean;
+  archetype: Archetype;
   objectKey: string;
   object: string;
   name: string;
   tagline: string;
+  openingLine: string;
   backstory: string;
   traits: string[];
   voiceModel: string;
