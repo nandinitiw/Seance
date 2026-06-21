@@ -210,7 +210,7 @@ export async function awaken(image: ImageInput): Promise<Persona> {
 
   try {
     const message = await client.messages.create({
-      model: config.anthropicModel,
+      model: config.anthropicVisionModel,
       max_tokens: 2048,
       system: systemPrompt(),
       tools: [EMIT_PERSONA_TOOL],
@@ -272,7 +272,7 @@ export async function reply(
   let message;
   try {
     message = await client.messages.create({
-      model: config.anthropicModel,
+      model: config.anthropicReplyModel,
       max_tokens: 300,
       // Short max_tokens keeps the spoken reply snappy in a live voice loop.
       system: persona.systemPrompt + memoryNote,
@@ -402,7 +402,7 @@ export async function generateEncounter(
 
   try {
     const message = await client.messages.create({
-      model: config.anthropicModel,
+      model: config.anthropicVisionModel,
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     });

@@ -4,8 +4,9 @@
  * Route params: personaJson — JSON-stringified AwakenResponse
  *
  * Architecture: ConversationScreen (parse shell) → ConversationView (voice logic).
- * useVoiceSession is only called inside ConversationView, mounted after parsing,
- * so the hook never sees a null persona.
+ * useConverse is only called inside ConversationView, mounted after parsing,
+ * so the hook never sees a null persona. Voice is REST hold-to-talk:
+ * record → POST /api/converse (STT → Claude → TTS) → play the mp3 reply.
  */
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -23,9 +24,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { AwakenResponse } from "../src/api";
 import {
-  useVoiceSession,
+  useConverse,
   type VoiceStatus,
-} from "../src/hooks/useVoiceSession";
+} from "../src/hooks/useConverse";
 import type { Turn } from "../src/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -420,63 +421,31 @@ function MicIcon({ status }: { status: VoiceStatus }) {
 function ConversationView({ result }: { result: AwakenResponse }) {
   const { persona, portraitUrl } = result;
 
-  const session = useVoiceSession(persona, result.history);
+  const session = useConverse(result);
   const listRef = useRef<FlatList<Turn>>(null);
   const [draft, setDraft] = useState("");
-  const [thinking, setThinking] = useState(false);
   const micScale = useRef(new Animated.Value(1)).current;
 
-  // Seed the first spirit message with the backstory
-  const seedTurn: Turn = { role: "assistant", text: persona.backstory };
+  const displayTurns = session.turns;
+  const thinking = session.status === "connecting";
+  const busy = thinking; // block new input while a reply is in flight
 
-  // All displayed turns: seed + session transcript (skip first assistant if duplicate)
-  const displayTurns: Turn[] = [seedTurn, ...session.transcript.filter(
-    (t, i) => !(i === 0 && t.role === "assistant" && t.text === persona.backstory)
-  )];
-
-  // Connect on mount, disconnect on unmount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Scroll to the latest turn as the log grows or while channeling.
   useEffect(() => {
-    session.connect();
-    return () => session.disconnect();
-  }, []);
-
-  // Scroll to end when new turns arrive
-  useEffect(() => {
-    if (displayTurns.length > 0) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-    }
-  }, [displayTurns.length]);
-
-  // Track thinking state
-  useEffect(() => {
-    setThinking(session.status === "connecting");
-  }, [session.status]);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+  }, [displayTurns.length, thinking]);
 
   const handleLeave = useCallback(() => {
-    session.disconnect();
+    // Audio teardown is handled by useConverse's unmount cleanup.
     router.back();
-  }, [session]);
-
-  const micDown = useCallback(() => {
-    // Voice activity detection is automatic via Deepgram
-    // onPressIn: visual feedback only — Deepgram auto-detects VAD
   }, []);
 
-  const micUp = useCallback(() => {
-    // onPressOut: visual feedback only
-  }, []);
-
-  const sendText = useCallback(() => {
+  const handleSend = useCallback(() => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || busy) return;
     setDraft("");
-    // We can't inject a text turn directly into the voice session,
-    // so we display it locally as a user turn (UX feedback)
-    // The actual sending would require a separate text endpoint;
-    // for now we show it in the UI and reset.
-    // If postTurns is desired, it can be wired up here.
-  }, [draft]);
+    session.sendText(text);
+  }, [draft, busy, session]);
 
   const agentSpeaking = session.status === "agent-speaking";
   const userSpeaking = session.status === "user-speaking";
@@ -539,9 +508,13 @@ function ConversationView({ result }: { result: AwakenResponse }) {
       </View>
 
       {/* Error banner */}
-      {session.error && (
+      {(session.error || session.micDenied) && (
         <View style={cv.errorBanner}>
-          <Text style={cv.errorText}>{session.error}</Text>
+          <Text style={cv.errorText}>
+            {session.micDenied
+              ? "Microphone access is off — enable it in Settings, or type below."
+              : session.error}
+          </Text>
         </View>
       )}
 
@@ -578,13 +551,14 @@ function ConversationView({ result }: { result: AwakenResponse }) {
             placeholder="type a message…"
             placeholderTextColor="#5A4F42"
             returnKeyType="send"
-            onSubmitEditing={sendText}
+            onSubmitEditing={handleSend}
+            editable={!busy}
             multiline={false}
           />
           {draft.trim().length > 0 && (
             <Pressable
               style={({ pressed }) => [cv.sendBtn, pressed && { opacity: 0.8 }]}
-              onPress={sendText}
+              onPress={handleSend}
             >
               <Text style={cv.sendBtnText}>SEND</Text>
             </Pressable>
@@ -603,8 +577,9 @@ function ConversationView({ result }: { result: AwakenResponse }) {
                 },
                 pressed && { opacity: 0.85 },
               ]}
-              onPressIn={micDown}
-              onPressOut={micUp}
+              onPressIn={session.startRecording}
+              onPressOut={session.stopRecording}
+              disabled={busy}
             >
               <MicIcon status={session.status} />
             </Pressable>

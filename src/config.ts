@@ -12,9 +12,14 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
 
   anthropicKey: process.env.ANTHROPIC_API_KEY ?? "",
-  // Opus 4.8 — strong vision + structured output for inventing the persona.
-  // For the low-latency chat loop you could drop to claude-haiku-4-5; see claude.ts.
+  // Per-call model selection — Opus is slowest, so reserve it as the default/fallback
+  // and use faster models on the hot paths (see claude.ts call sites).
+  // Default/fallback. Strong vision + structured output, but slow.
   anthropicModel: "claude-opus-4-8" as const,
+  // Vision → persona (awaken) and the encounter scene: good vision, much faster than Opus.
+  anthropicVisionModel: "claude-sonnet-4-6" as const,
+  // In-conversation spoken reply: fastest model, for the live voice loop.
+  anthropicReplyModel: "claude-haiku-4-5-20251001" as const,
 
   deepgramKey: process.env.DEEPGRAM_API_KEY ?? "",
   deepgramTtsModel: process.env.DEEPGRAM_TTS_MODEL ?? "aura-2-thalia-en",

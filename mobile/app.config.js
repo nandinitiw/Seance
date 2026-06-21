@@ -23,7 +23,7 @@ module.exports = {
         },
       ],
       [
-        "react-native-deepgram",
+        "expo-av",
         {
           microphonePermission:
             "Séance needs your mic so objects can hear you and talk back.",
