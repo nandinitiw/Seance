@@ -325,7 +325,7 @@ export default function AwakenScreen() {
         <View style={styles.progressTrack}>
           <Animated.View style={[styles.progressFillWrap, { width: progressWidth }]}>
             <LinearGradient
-              colors={['#34B7A0', '#FF5A38']}
+              colors={[C.teal, C.ember]}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
               style={StyleSheet.absoluteFillObject}
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
     width: 280,
     height: 200,
     borderRadius: 140,
-    backgroundColor: '#FF5A38',
+    backgroundColor: C.ember,
     opacity: 0.22,
   },
 
@@ -390,9 +390,9 @@ const styles = StyleSheet.create({
     width: 172,
     height: 212,
     borderRadius: 9,
-    backgroundColor: '#FF5A38',
+    backgroundColor: C.ember,
     opacity: 0.22,
-    shadowColor: '#FF5A38',
+    shadowColor: C.ember,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 28,
@@ -403,9 +403,9 @@ const styles = StyleSheet.create({
     width: 192,
     height: 232,
     borderRadius: 12,
-    backgroundColor: '#34B7A0',
+    backgroundColor: C.teal,
     opacity: 0.08,
-    shadowColor: '#34B7A0',
+    shadowColor: C.teal,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 50,
@@ -426,13 +426,13 @@ const styles = StyleSheet.create({
   },
   photoPlaceholder: {
     flex: 1,
-    backgroundColor: '#1A120D',
+    backgroundColor: C.surfaceDeep,
   },
   // Progress bar
   progressTrack: {
     width: 210,
     height: 3,
-    backgroundColor: '#2B241E',
+    backgroundColor: C.surface,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 9,
     letterSpacing: 2,
-    color: '#FF5A38',
+    color: C.ember,
   },
   pctLabel: {
     fontFamily: FONTS.mono,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   logMarkDone: {
-    color: '#5A4F42',
+    color: C.inkFaint,
   },
   logText: {
     fontFamily: FONTS.mono,
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     color: C.textLight,
   },
   logTextDone: {
-    color: '#8A7C68',
+    color: C.textDimmest,
     opacity: 0.7,
   },
 
@@ -514,9 +514,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SP.md,
   },
   retryBtn: {
-    backgroundColor: '#D93D1A',
+    backgroundColor: C.red,
     borderWidth: 1,
-    borderColor: '#7A1F0C',
+    borderColor: C.redDeeper,
     borderRadius: 10,
     paddingVertical: 15,
     paddingHorizontal: 32,
@@ -524,6 +524,6 @@ const styles = StyleSheet.create({
   retryBtnText: {
     fontFamily: FONTS.serif,
     fontSize: 20,
-    color: '#F0E7D6',
+    color: C.textLight,
   },
 });
