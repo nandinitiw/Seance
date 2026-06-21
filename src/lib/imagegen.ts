@@ -123,20 +123,12 @@ async function paintWithGemini(persona: Persona): Promise<string> {
 const MYSTERY_PROMPT =
   "a whimsical abstract mystery creature, colorful, cartoon style, glowing question marks, playful, no text";
 
-export async function generateMysteryPortrait(fallbackDataUrl: string): Promise<string> {
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(MYSTERY_PROMPT)}?width=512&height=512&nologo=true`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`Pollinations ${res.status}`);
-    return url;
-  } catch (e) {
-    console.warn("generateMysteryPortrait: Pollinations unavailable, using raw photo:", (e as Error).message);
-    return fallbackDataUrl;
-  } finally {
-    clearTimeout(timeout);
-  }
+export async function generateMysteryPortrait(_fallbackDataUrl: string): Promise<string> {
+  // Return the URL immediately and let the client's <Image> load it. We used to
+  // probe it first with a blocking fetch (up to 8s) — but we return the URL, not
+  // the bytes, so the probe only added latency to /api/awaken on the unrecognized
+  // path (which the always-objectRecognized:false fallback persona also hits).
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(MYSTERY_PROMPT)}?width=512&height=512&nologo=true`;
 }
 
 // ── Midjourney via your own proxy (no official API) ──────────────────────────
