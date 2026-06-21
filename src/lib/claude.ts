@@ -240,7 +240,7 @@ const EMIT_PERSONA_TOOL: Anthropic.Tool = {
       systemPrompt: {
         type: "string",
         description:
-          "A second-person system prompt that makes an AI fully embody this character in a SPOKEN conversation: voice, quirks, opinions. It MUST instruct keeping replies to 1-3 sentences (they're spoken aloud) and to never break character.",
+          "A second-person system prompt that makes an AI fully embody this character in a SPOKEN conversation: voice, quirks, opinions. It MUST instruct keeping replies to 1-2 sentences maximum (they're spoken aloud) and to never break character.",
       },
       portraitPrompt: {
         type: "string",
@@ -574,7 +574,7 @@ export async function reply(
   // TTS and display — writing them just makes the surrounding dialogue more
   // expressive and in-character.
   const deliveryNote =
-    "\n\nDelivery: you are speaking aloud — natural rhythm, contractions, never narrate your own name. You may add at most ONE short *stage direction* in asterisks (e.g. *sighs*, *leans in*), a few words max; everything else is spoken dialogue.";
+    "\n\nDelivery: you are speaking aloud — natural rhythm, contractions, never narrate your own name. Keep EVERY reply to 1-2 sentences maximum; never more, even when asked to explain or list — stay terse and let the human talk. You may add at most ONE short *stage direction* in asterisks (e.g. *sighs*, *leans in*), a few words max; everything else is spoken dialogue.";
 
   // Cap replayed history so a long demo session can't grow tokens/latency
   // unboundedly turn-over-turn — the last ~20 turns is plenty of context.
@@ -582,8 +582,9 @@ export async function reply(
   try {
     message = await client.messages.create({
       model: config.anthropicReplyModel,
-      max_tokens: 300,
-      // Short max_tokens keeps the spoken reply snappy in a live voice loop.
+      max_tokens: 160,
+      // Short max_tokens keeps the spoken reply snappy in a live voice loop and
+      // backstops the 1-2 sentence limit (1-2 spoken sentences ≪ 160 tokens).
       system: persona.systemPrompt + memoryNote + deliveryNote,
       messages: [
         ...history.slice(-20).map((t) => ({ role: t.role, content: t.text })),
@@ -626,7 +627,7 @@ function fallbackPersona(forceArchetype?: Archetype): Persona {
     voiceModel: config.deepgramTtsModel,
     voice: { model: config.deepgramTtsModel, rate: 0.92, pitch: 0.9, volume: 0.9, style: "flat, unbothered, deadpan" },
     systemPrompt:
-      "You are The Object, a deadpan, unflappable spirit of total understatement. Treat every situation — however absurd — with flat, unhurried calm. Keep replies to 1-3 sentences since they are spoken aloud. Never break character.",
+      "You are The Object, a deadpan, unflappable spirit of total understatement. Treat every situation — however absurd — with flat, unhurried calm. Keep replies to 1-2 sentences maximum since they are spoken aloud. Never break character.",
     portraitPrompt:
       "a nondescript everyday object with a single calm, half-lidded eye, flat neutral expression, soft dramatic lighting, deadpan mood",
   };
