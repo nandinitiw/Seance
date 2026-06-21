@@ -26,6 +26,7 @@ import Svg, { Defs, Pattern, Circle, Rect } from "react-native-svg";
 import { encounter, type AwakenResponse } from "../src/api";
 import type { Persona } from "../src/types";
 import { sessionStore } from "../src/sessionStore";
+import { AliveAvatar } from "../src/components/AliveAvatar";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ function TraitChip({ label }: { label: string }) {
 
 // ── Spirit Card ───────────────────────────────────────────────────────────────
 
-function SpiritCard({ result }: { result: AwakenResponse }) {
+function SpiritCard({ result, speaking }: { result: AwakenResponse; speaking: boolean }) {
   const { persona, portraitUrl, encounters, returning } = result;
 
   // Entrance animation: translateY + scale + perspective rotateY
@@ -126,12 +127,13 @@ function SpiritCard({ result }: { result: AwakenResponse }) {
         <Text style={cs.catalogNum}>#{String(encounters).padStart(4, "0")}</Text>
       </View>
 
-      {/* Portrait */}
+      {/* Portrait — alive: archetype-specific motion, livelier while speaking */}
       <View style={cs.photoWrap}>
-        <Image
-          source={{ uri: portraitUrl }}
+        <AliveAvatar
+          portraitUrl={portraitUrl}
+          archetype={persona.archetype}
+          speaking={speaking}
           style={cs.photo}
-          resizeMode="cover"
         />
         <LinearGradient
           colors={['rgba(255,90,56,0.16)', 'transparent', 'rgba(52,183,160,0.14)']}
@@ -400,7 +402,7 @@ export default function RevealScreen() {
         </Text>
 
         {/* Spirit card �� swaps persona on pick */}
-        <SpiritCard result={displayResult} />
+        <SpiritCard result={displayResult} speaking={speakingIdx === activePersonaIdx} />
 
         {/* Persona picker — fades in after opening line finishes */}
         {pickerVisible && altPersonas.length > 0 && (
