@@ -42,6 +42,30 @@ export async function fetchPersona(objectKey: string): Promise<PersonaResponse> 
   return res.json();
 }
 
+/** One row on the history page — mirrors the server's SessionSummary. */
+export interface HistoryItem {
+  objectKey: string;
+  name: string;
+  object: string;
+  archetype: string;
+  tagline: string;
+  portraitUrl: string;
+  encounters: number;
+  /** Total dialogue turns recorded (user + assistant). */
+  turns: number;
+  lastMessage: string;
+  /** Epoch ms of the last awaken/turn — list is newest-first. */
+  updatedAt: number;
+}
+
+/** Every object ever awakened (most recent first), for the history page. */
+export async function fetchHistory(): Promise<HistoryItem[]> {
+  const res = await fetch(`${API_BASE}/api/history`);
+  if (!res.ok) throw new Error(`fetchHistory ${res.status}`);
+  const data = await res.json();
+  return (data.sessions ?? []) as HistoryItem[];
+}
+
 export interface ConverseInput {
   objectKey: string;
   /** A local file URI from an expo-av Recording (e.g. file:///…/speech.m4a). */

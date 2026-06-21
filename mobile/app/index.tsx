@@ -4,9 +4,10 @@
  */
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sessionStore } from '../src/sessionStore';
+import { fetchHistory, type HistoryItem } from '../src/api';
 import {
   ActivityIndicator,
   Animated,
@@ -21,13 +22,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, FONTS, R, SP } from '../src/theme';
 
-// ── Demo ledger data ──────────────────────────────────────────────────────────
+// ── Ledger accent palette (one per card) ───────────────────────────────────────
 
-const LEDGER = [
-  { name: 'Klamp', obj: 'red stapler', n: 7, tone: '#0F6B5C' },
-  { name: 'Sir Reginald', obj: 'chipped mug', n: 3, tone: '#B8923C' },
-  { name: 'The Warden', obj: 'brass padlock', n: 1, tone: '#D93D1A' },
-];
+const LEDGER_TONES = ['#0F6B5C', '#B8923C', '#D93D1A'];
 
 // ── Corner bracket decoration ─────────────────────────────────────────────────
 
@@ -63,6 +60,7 @@ export default function CaptureScreen() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ledger, setLedger] = useState<HistoryItem[]>([]);
 
   const btnScale = useRef(new Animated.Value(1)).current;
   const scanAnim = useRef(new Animated.Value(0)).current;
@@ -71,7 +69,11 @@ export default function CaptureScreen() {
   // Idempotent navigation: reset every time this screen regains focus, so a
   // double-tap can't push two awaken screens (and two awaken() calls).
   const navLock = useRef(false);
-  useFocusEffect(useCallback(() => { navLock.current = false; }, []));
+  useFocusEffect(useCallback(() => {
+    navLock.current = false;
+    // Refresh the ledger whenever we return here (e.g. after awakening a new object).
+    fetchHistory().then(setLedger).catch(() => {});
+  }, []));
 
   useEffect(() => {
     Animated.loop(
@@ -300,25 +302,40 @@ export default function CaptureScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* ── Ledger ────────────────────────────────────── */}
+        {/* ── Ledger (real history from Redis) ──────────── */}
         <View style={styles.ledger}>
           <View style={styles.ledgerDivider} />
-          <View style={styles.ledgerHeader}>
+          <TouchableOpacity
+            style={styles.ledgerHeader}
+            onPress={() => router.push('/history')}
+            activeOpacity={0.7}
+          >
             <Text style={styles.ledgerLabel}>THE LEDGER</Text>
-            <Text style={styles.ledgerCount}>3 souls bound</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 7 }}>
-            {LEDGER.map((entry) => (
-              <View key={entry.name} style={[styles.ledgerCard, { borderLeftColor: entry.tone, flex: 1, minWidth: 0 }]}>
-                <View style={styles.ledgerCardInner}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.ledgerName} numberOfLines={1}>{entry.name}</Text>
-                    <Text style={styles.ledgerObj} numberOfLines={1}>{entry.obj} · ×{entry.n}</Text>
+            <Text style={styles.ledgerCount}>
+              {ledger.length > 0 ? `${ledger.length} bound · view all ›` : 'view all ›'}
+            </Text>
+          </TouchableOpacity>
+          {ledger.length > 0 ? (
+            <View style={{ flexDirection: 'row', gap: 7 }}>
+              {ledger.slice(0, 3).map((entry, i) => (
+                <TouchableOpacity
+                  key={entry.objectKey}
+                  activeOpacity={0.8}
+                  onPress={() => router.push('/history')}
+                  style={[styles.ledgerCard, { borderLeftColor: LEDGER_TONES[i % LEDGER_TONES.length], flex: 1, minWidth: 0 }]}
+                >
+                  <View style={styles.ledgerCardInner}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.ledgerName} numberOfLines={1}>{entry.name}</Text>
+                      <Text style={styles.ledgerObj} numberOfLines={1}>{entry.object} · ×{entry.encounters}</Text>
+                    </View>
                   </View>
-                </View>
-              </View>
-            ))}
-          </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.ledgerEmpty}>No spirits bound yet — summon one above.</Text>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -594,6 +611,13 @@ const styles = StyleSheet.create({
     fontSize: 9,
     letterSpacing: 1,
     color: C.textDimmer,
+  },
+  ledgerEmpty: {
+    fontFamily: FONTS.mono,
+    fontSize: 10,
+    color: C.textMuted,
+    letterSpacing: 0.5,
+    paddingVertical: SP.sm,
   },
   ledgerCard: {
     borderLeftWidth: 3,
