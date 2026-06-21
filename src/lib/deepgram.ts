@@ -42,12 +42,29 @@ export async function transcribe(audio: Buffer, contentType: string): Promise<st
 }
 
 /**
+ * Strip *stage directions* so the TTS voice never reads them aloud. Claude writes
+ * short asterisk asides (e.g. *sighs*) to color its tone; those are not speech.
+ * Exported so callers/tests can share the exact rule.
+ */
+export function stripStageDirections(text: string): string {
+  return text
+    .replace(/\*[^*]*\*/g, " ") // remove *...* spans
+    .replace(/\s+([,.!?;:…])/g, "$1") // tidy space left before punctuation
+    .replace(/\s{2,}/g, " ") // collapse runs of whitespace
+    .trim();
+}
+
+/**
  * Speak text in the character's voice → MP3 bytes.
  * @param voiceModel a Deepgram aura voice id chosen by the persona
  * Returns null in mock mode; the app then shows the reply as text (no audio).
  */
 export async function speak(text: string, voiceModel: string): Promise<Buffer | null> {
   if (!caps.hasDeepgram) return null;
+
+  // Never vocalize stage directions; if a reply is *only* a direction, skip TTS.
+  const clean = stripStageDirections(text);
+  if (!clean) return null;
 
   const url = new URL("https://api.deepgram.com/v1/speak");
   url.searchParams.set("model", voiceModel || config.deepgramTtsModel);
@@ -63,7 +80,7 @@ export async function speak(text: string, voiceModel: string): Promise<Buffer | 
         Authorization: `Token ${config.deepgramKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: clean }),
       signal: controller.signal,
     });
   } finally {

@@ -227,6 +227,18 @@ const td = StyleSheet.create({
 
 // ── Chat bubble ───────────────────────────────────────────────────────────────
 
+// Stage directions (*...*) shape the spirit's tone but aren't shown: the backend
+// strips them from speech, we strip them from the transcript. Fall back to the
+// raw text if a turn is *only* a direction, so a bubble is never empty.
+function stripStageDirections(text: string): string {
+  const cleaned = text
+    .replace(/\*[^*]*\*/g, " ")
+    .replace(/\s+([,.!?;:…])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return cleaned || text;
+}
+
 function ChatBubble({
   turn,
   personaName,
@@ -247,7 +259,7 @@ function ChatBubble({
         ]}
       >
         <Text style={[cb.text, isUser ? cb.textUser : cb.textAgent]}>
-          {turn.text}
+          {stripStageDirections(turn.text)}
         </Text>
       </View>
     </View>

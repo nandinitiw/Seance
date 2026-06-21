@@ -410,6 +410,13 @@ export async function reply(
       ? `\n\nThis is encounter #${encounters} with a human — you have met before. Reference your shared history naturally if it fits.`
       : "";
 
+  // Replies are spoken aloud. Push for natural delivery and let the character add
+  // a short *stage direction* for tone. Those asterisk spans are stripped before
+  // TTS and display — writing them just makes the surrounding dialogue more
+  // expressive and in-character.
+  const deliveryNote =
+    "\n\nDelivery: you are speaking aloud — natural rhythm, contractions, never narrate your own name. You may add at most ONE short *stage direction* in asterisks (e.g. *sighs*, *leans in*), a few words max; everything else is spoken dialogue.";
+
   // Cap replayed history so a long demo session can't grow tokens/latency
   // unboundedly turn-over-turn — the last ~20 turns is plenty of context.
   let message;
@@ -418,7 +425,7 @@ export async function reply(
       model: config.anthropicReplyModel,
       max_tokens: 300,
       // Short max_tokens keeps the spoken reply snappy in a live voice loop.
-      system: persona.systemPrompt + memoryNote,
+      system: persona.systemPrompt + memoryNote + deliveryNote,
       messages: [
         ...history.slice(-20).map((t) => ({ role: t.role, content: t.text })),
         { role: "user" as const, content: userText },
