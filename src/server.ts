@@ -1,10 +1,11 @@
 import express from "express";
 import multer from "multer";
 import { config, caps, logCapabilities } from "./config.js";
-import { awaken, reply, generateEncounter, type ImageInput } from "./lib/claude.js";
+import { awaken, reply, generateEncounter, archetypeCatalog, isArchetype, type ImageInput } from "./lib/claude.js";
 import { paintPortrait, generateMysteryPortrait } from "./lib/imagegen.js";
 import { transcribe, speak } from "./lib/deepgram.js";
-import { loadState, saveState, listStates } from "./lib/memory.js";
+import { loadState, saveState } from "./lib/memory.js";
+import { recordSession, listSessions, getSession } from "./lib/history.js";
 import type { SessionState } from "./types.js";
 
 // API only — the client is the Expo phone app in app/. No static web frontend.
@@ -19,9 +20,52 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 app.use(express.json({ limit: "15mb" }));
 
 /**
+ * GET /api/archetypes
+ * The personality catalog (key + label + description) for the UI picker.
+ */
+app.get("/api/archetypes", (_req, res) => {
+  res.json({ archetypes: archetypeCatalog() });
+});
+
+/**
+ * GET /api/history
+ * The "past chats" gallery — every remembered object, most recent first.
+ */
+app.get("/api/history", async (_req, res) => {
+  try {
+    res.json({ sessions: await listSessions() });
+  } catch (err) {
+    console.error("history list failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
+ * GET /api/history/:objectKey
+ * Reopen a past chat: the persona + portrait + full transcript to revisit.
+ */
+app.get("/api/history/:objectKey", async (req, res) => {
+  try {
+    const state = await getSession(req.params.objectKey);
+    if (!state) return res.status(404).json({ error: "That memory has faded — awaken it again." });
+    res.json({
+      persona: state.persona,
+      portraitUrl: state.portraitUrl,
+      encounters: state.encounters,
+      history: state.history,
+    });
+  } catch (err) {
+    console.error("history fetch failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
  * POST /api/awaken
- * Body: { image: "data:image/jpeg;base64,..." | "https://..." }
+ * Body: { image: "data:image/jpeg;base64,..." | "https://...", archetype?: string }
  * Pipeline: photo → Claude invents persona → paint portrait → load/save memory.
+ * Omit `archetype` to get Claude's recommendation; pass one of /api/archetypes
+ * to force the personality the user picked.
  * Returns the persona + portrait + how many times this object has been met.
  */
 app.post("/api/awaken", async (req, res) => {
@@ -38,8 +82,11 @@ app.post("/api/awaken", async (req, res) => {
       return res.status(400).json({ error: "Expected { image: dataURL | https URL }" });
     }
 
-    // 1. Channel the character from the photo.
-    const persona = await awaken(input);
+    // Optional: honor the personality the user chose; ignore unknown values.
+    const forceArchetype = isArchetype(req.body.archetype) ? req.body.archetype : undefined;
+
+    // 1. Channel the character from the photo (honoring the user's picked archetype).
+    const persona = await awaken(input, { forceArchetype });
     persona.objectKey = normalizeKey(persona.objectKey);
     // Optional override: a client may pin a stable objectKey so the same
     // rehearsed object reliably "remembers you" across scans, even if Claude's
@@ -67,6 +114,7 @@ app.post("/api/awaken", async (req, res) => {
       encounters: (prior?.encounters ?? 0) + 1,
     };
     await saveState(state);
+    await recordSession(state); // index it for the "past chats" gallery
 
     res.json({
       persona: state.persona,
@@ -119,6 +167,7 @@ app.post("/api/converse", upload.single("audio"), async (req, res) => {
     state.history.push({ role: "user", text: userText });
     state.history.push({ role: "assistant", text: replyText });
     await saveState(state);
+    await recordSession(state); // refresh the gallery preview/timestamp
 
     // 4. Voice it. A TTS failure must NOT lose the (already-generated) reply —
     //    degrade to null so the client still renders the text.
@@ -160,35 +209,6 @@ app.get("/api/persona/:objectKey", async (req, res) => {
     encounters: state.encounters,
     history: state.history,
   });
-});
-
-/**
- * GET /api/history — every awakened object, as lightweight summaries for the
- * history page (no full transcripts). Sorted most-talked-to first.
- */
-app.get("/api/history", async (_req, res) => {
-  try {
-    const states = await listStates();
-    const items = states
-      .map((s) => {
-        const lastReply = [...s.history].reverse().find((t) => t.role === "assistant");
-        return {
-          objectKey: s.persona.objectKey,
-          name: s.persona.name,
-          object: s.persona.object,
-          tagline: s.persona.tagline,
-          portraitUrl: s.portraitUrl,
-          encounters: s.encounters,
-          turnCount: s.history.length,
-          lastMessage: lastReply?.text ?? s.persona.tagline,
-        };
-      })
-      .sort((a, b) => b.encounters - a.encounters || b.turnCount - a.turnCount);
-    res.json({ items });
-  } catch (err) {
-    console.error("history failed:", err);
-    res.status(500).json({ error: String(err) });
-  }
 });
 
 /**
@@ -251,29 +271,52 @@ app.post("/api/turns", async (req, res) => {
 });
 
 /**
+ * POST /api/tts
+ * Body: { text: string, voiceModel?: string }
+ * Returns { audio: string | null } — base64 mp3, or null when Deepgram is off.
+ * Used by the encounter screen to speak pre-written lines in each persona's voice.
+ */
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text, voiceModel } = req.body as { text?: string; voiceModel?: string };
+    if (!text?.trim()) return res.status(400).json({ error: "text is required." });
+    const audio = await speak(text.trim(), voiceModel ?? config.deepgramTtsModel).catch(() => null);
+    res.json({ audio: audio ? audio.toString("base64") : null });
+  } catch (err) {
+    console.error("tts failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/**
  * POST /api/encounter
- * Body: { objectKey1: string, objectKey2: string }
+ * Body: { objectKey1, objectKey2, dynamic? }
  * Generates a scripted 6-line scene between two awakened objects.
- * Returns { lines: EncounterLine[], persona1: Persona, persona2: Persona }
+ * Returns { lines, relationship, persona1, persona2, portraitUrl1, portraitUrl2 }
  */
 app.post("/api/encounter", async (req, res) => {
-  const { objectKey1, objectKey2, dynamic } = req.body as { objectKey1: string; objectKey2: string; dynamic?: string };
-  if (!objectKey1 || !objectKey2) {
-    return res.status(400).json({ error: "objectKey1 and objectKey2 are required." });
-  }
-  const [state1, state2] = await Promise.all([loadState(objectKey1), loadState(objectKey2)]);
-  if (!state1) return res.status(404).json({ error: `Unknown object: ${objectKey1}` });
-  if (!state2) return res.status(404).json({ error: `Unknown object: ${objectKey2}` });
+  try {
+    const { objectKey1, objectKey2, dynamic } = req.body as { objectKey1: string; objectKey2: string; dynamic?: string };
+    if (!objectKey1 || !objectKey2) {
+      return res.status(400).json({ error: "objectKey1 and objectKey2 are required." });
+    }
+    const [state1, state2] = await Promise.all([loadState(objectKey1), loadState(objectKey2)]);
+    if (!state1) return res.status(404).json({ error: `Unknown object: ${objectKey1}` });
+    if (!state2) return res.status(404).json({ error: `Unknown object: ${objectKey2}` });
 
-  const { lines, relationship } = await generateEncounter(state1.persona, state2.persona, dynamic);
-  res.json({
-    lines,
-    relationship,
-    persona1: state1.persona,
-    persona2: state2.persona,
-    portraitUrl1: state1.portraitUrl,
-    portraitUrl2: state2.portraitUrl,
-  });
+    const { lines, relationship } = await generateEncounter(state1.persona, state2.persona, dynamic);
+    res.json({
+      lines,
+      relationship,
+      persona1: state1.persona,
+      persona2: state2.persona,
+      portraitUrl1: state1.portraitUrl,
+      portraitUrl2: state2.portraitUrl,
+    });
+  } catch (err) {
+    console.error("encounter failed:", err);
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 app.listen(config.port, () => {

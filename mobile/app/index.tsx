@@ -4,7 +4,7 @@
  */
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sessionStore } from '../src/sessionStore';
 import { fetchHistory, type HistoryItem } from '../src/api';
@@ -56,6 +56,7 @@ function CornerBracket({
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function CaptureScreen() {
+  const { challengerJson } = useLocalSearchParams<{ challengerJson?: string }>();
   const [photo, setPhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,12 +175,22 @@ export default function CaptureScreen() {
           <Text style={styles.tagline}>A SPIRIT MEDIUM FOR OBJECTS</Text>
           <Text style={styles.brand}>Séance</Text>
 
-          {/* Separator row */}
-          <View style={styles.separatorRow}>
-            <View style={styles.separatorLine} />
-            <Text style={styles.separatorText}>POINT · SUMMON · SPEAK</Text>
-            <View style={styles.separatorLine} />
-          </View>
+          {/* Separator row — or rival banner when in introduction mode */}
+          {challengerJson ? (
+            <View style={styles.rivalBanner}>
+              <Text style={styles.rivalBannerText}>
+                ✦ INTRODUCING{" "}
+                {(() => { try { return (JSON.parse(challengerJson) as { persona: { name: string } }).persona.name.toUpperCase(); } catch { return "THE SPIRIT"; } })()}
+                {" "}TO…
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.separatorRow}>
+              <View style={styles.separatorLine} />
+              <Text style={styles.separatorText}>POINT · SUMMON · SPEAK</Text>
+              <View style={styles.separatorLine} />
+            </View>
+          )}
         </View>
 
         {/* ── Viewfinder ────────────────────────────────── */}
@@ -386,6 +397,23 @@ const styles = StyleSheet.create({
     fontSize: 9,
     letterSpacing: 2.5,
     color: C.textMuted,
+  },
+
+  rivalBanner: {
+    marginTop: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderWidth: 0.75,
+    borderColor: '#34B7A0',
+    borderRadius: 4,
+    backgroundColor: 'rgba(52,183,160,0.07)',
+  },
+  rivalBannerText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    letterSpacing: 2,
+    color: '#34B7A0',
+    textAlign: 'center',
   },
 
   // Viewfinder

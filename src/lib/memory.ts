@@ -51,8 +51,6 @@ async function getRedis() {
 }
 
 const KEY = (objectKey: string) => `seance:object:${objectKey}`;
-// A set of every awakened objectKey, so the history page can enumerate them.
-const INDEX = "seance:index";
 
 export async function loadState(objectKey: string): Promise<SessionState | null> {
   const r = await getRedis();
@@ -76,41 +74,14 @@ export async function saveState(state: SessionState): Promise<void> {
   if (r) {
     try {
       // 7-day TTL so the demo db stays tidy; drop the option to keep forever.
-      // Also record the key in the index set so /api/history can list everything.
       await withTimeout(
-        Promise.all([
-          r.set(KEY(key), JSON.stringify(state), { EX: 60 * 60 * 24 * 7 }),
-          r.sAdd(INDEX, key),
-        ]),
+        r.set(KEY(key), JSON.stringify(state), { EX: 60 * 60 * 24 * 7 }),
         1_500,
       );
     } catch {
       redisDead = true;
     }
   }
-}
-
-/**
- * Every awakened object, for the history page. Redis when reachable, else the
- * in-process Map (so history still renders in mock/offline mode). Best-effort.
- */
-export async function listStates(): Promise<SessionState[]> {
-  const r = await getRedis();
-  if (r) {
-    try {
-      const keys = await withTimeout(r.sMembers(INDEX), 1_500);
-      if (keys.length > 0) {
-        const raws = await withTimeout(r.mGet(keys.map(KEY)), 1_500);
-        const states = raws
-          .filter((raw): raw is string => Boolean(raw))
-          .map((raw) => JSON.parse(raw) as SessionState);
-        if (states.length > 0) return states;
-      }
-    } catch {
-      redisDead = true; // fall through to the Map
-    }
-  }
-  return [...mem.values()];
 }
 
 /**
